@@ -46,7 +46,7 @@ export default function AuthScreen() {
     expoClientId: 'YOUR_EXPO_CLIENT_ID_HERE',
     iosClientId: 'YOUR_IOS_CLIENT_ID',
     androidClientId: 'YOUR_ANDROID_CLIENT_ID',
-    webClientId: 'YOUR_WEB_CLIENT_ID', // from Firebase
+    webClientId: '1:699272670821:web:dc7f20a1f33fce09fa208c', // from Firebase
   });
 
   useEffect(() => {
