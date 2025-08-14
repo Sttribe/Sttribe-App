@@ -12,5 +12,5 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts"
-, "app/AuthScreen.jsx"  ]
+, "app/AuthScreen.jsx", "app/ChatScreen.js"  ]
 }
