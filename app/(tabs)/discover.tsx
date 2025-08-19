@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from "axios";
 import {
   View,
   Text,
@@ -8,6 +9,7 @@ import {
   SafeAreaView,
   Image,
   TextInput,
+  ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -22,111 +24,66 @@ import {
   Bookmark
 } from 'lucide-react-native';
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [freeContent, setFreeContent] = useState([]);
+  const [categories, setCategories] = useState(['All']);
+  const [loading, setLoading] = useState(true);
+  // const [filteredContent, setFilteredContent] = useState([]);
 
-  const categories = ['All', 'Movies', 'TV Shows', 'Documentaries', 'Kids', 'Sports'];
+  // const categories = ['All', 'Drama', 'TV Shows', 'Biography', 'Thriller', 'Comedy', 'Documentaries'];
 
   const platforms = [
     { name: 'Netflix', color: '#E50914', icon: 'netflix', lib: 'MaterialCommunityIcons' },
     { name: 'YouTube', color: '#FF0000', icon: 'youtube', lib: 'FontAwesome' },
     { name: 'JioHotstar', color: '#1E40AF', icon: 'movie-play', lib: 'MaterialCommunityIcons' },
-    { name: 'SonyLIV', color: '#FF6B35', icon: 'television-classic', lib: 'MaterialCommunityIcons' }, // SonyLIV doesn't have official icon
+    { name: 'SonyLIV', color: '#FF6B35', icon: 'television-classic', lib: 'MaterialCommunityIcons' },
     { name: 'Amazon', color: '#FF9900', icon: 'amazon', lib: 'FontAwesome' },
     { name: 'Spotify', color: '#1DB954', icon: 'spotify', lib: 'FontAwesome' },
   ];
 
-  const freeContent = [
-    {
-      id: 1,
-      title: 'The Kashmir Files',
-      type: 'Movie',
-      platform: 'YouTube',
-      duration: '2h 50m',
-      rating: 4.8,
-      views: '2.5M',
-      image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400',
-      description: 'A gripping drama based on true events in Kashmir',
-      genre: 'Drama',
-      year: 2022,
-      isPremium: false,
-    },
-    {
-      id: 2,
-      title: 'Scam 1992',
-      type: 'TV Show',
-      platform: 'SonyLIV',
-      duration: '10 episodes',
-      rating: 4.9,
-      views: '5.2M',
-      image: 'https://images.pexels.com/photos/3945313/pexels-photo-3945313.jpeg?auto=compress&cs=tinysrgb&w=400',
-      description: 'The story of Harshad Mehta and the 1992 securities scam',
-      genre: 'Biography',
-      year: 2020,
-      isPremium: false,
-    },
-    {
-      id: 3,
-      title: 'Free Guy',
-      type: 'Movie',
-      platform: 'Disney+ Hotstar',
-      duration: '1h 55m',
-      rating: 4.6,
-      views: '8.1M',
-      image: 'https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400',
-      description: 'A bank teller discovers he is a background character in a video game',
-      genre: 'Comedy',
-      year: 2021,
-      isPremium: false,
-    },
-    {
-      id: 4,
-      title: 'National Geographic Wild',
-      type: 'Documentary',
-      platform: 'YouTube',
-      duration: '45m',
-      rating: 4.7,
-      views: '1.8M',
-      image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400',
-      description: 'Wildlife documentaries from around the world',
-      genre: 'Documentary',
-      year: 2023,
-      isPremium: false,
-    },
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res = await axios.get("https://api-s2onatgxwq-uc.a.run.app/api/free-streams");
+        setFreeContent(res.data);
+      } catch (error) {
+        console.error("Error fetching free streams:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const trendingNow = [
-    {
-      id: 1,
-      title: 'Wednesday',
-      platform: 'Netflix',
-      image: 'https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=200',
-      rating: 4.8,
-    },
-    {
-      id: 2,
-      title: 'The Bear',
-      platform: 'Disney+',
-      image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=200',
-      rating: 4.9,
-    },
-    {
-      id: 3,
-      title: 'House of Dragons',
-      platform: 'HBO Max',
-      image: 'https://images.pexels.com/photos/3945313/pexels-photo-3945313.jpeg?auto=compress&cs=tinysrgb&w=200',
-      rating: 4.7,
-    },
-  ];
+    fetchData();
+  }, []);
 
-  const filteredContent = freeContent.filter(item =>
-    (selectedCategory === 'All' || item.type === selectedCategory) &&
-    (item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.platform.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.genre.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  useEffect(() => {
+    if (freeContent.length > 0) {
+      const uniqueGenres = [...new Set(
+        freeContent.map(item =>
+          item.genre?.charAt(0).toUpperCase() + item.genre?.slice(1)
+        )
+      )];
+      setCategories(['All', ...uniqueGenres]);
+    }
+  }, [freeContent]);
+
+  const filteredContent = freeContent.filter(item => {
+    const matchesCategory =
+      selectedCategory === 'All' ||
+      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase().slice(0, -1)); // handles plural
+
+    const matchesSearch =
+      item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase())
+
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -134,9 +91,9 @@ export default function DiscoverScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Discover</Text>
-          <TouchableOpacity style={styles.filterButton}>
+          {/* <TouchableOpacity style={styles.filterButton}>
             <Filter size={20} color="#6B7280" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Search Bar */}
@@ -178,99 +135,33 @@ export default function DiscoverScreen() {
           </ScrollView>
         </View>
 
-        {/* Trending Now */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trending Now</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {trendingNow.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.trendingCard}>
-                <Image source={{ uri: item.image }} style={styles.trendingImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.trendingOverlay}
-                />
-                <View style={styles.trendingInfo}>
-                  <Text style={styles.trendingTitle}>{item.title}</Text>
-                  <View style={styles.trendingMeta}>
-                    <Star size={12} color="#F59E0B" />
-                    <Text style={styles.trendingRating}>{item.rating}</Text>
-                    <Text style={styles.trendingPlatform}>{item.platform}</Text>
-                  </View>
-                </View>
-                <View style={styles.playButton}>
-                  <Play size={16} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
         {/* Free Content */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Free to Watch</Text>
-          {filteredContent.map((item) => (
-            <TouchableOpacity key={item.id} style={styles.contentCard}>
-              <Image source={{ uri: item.image }} style={styles.contentImage} />
-              <View style={styles.contentInfo}>
-                <View style={styles.contentHeader}>
-                  <Text style={styles.contentTitle}>{item.title}</Text>
-                  <View style={styles.contentActions}>
-                    <TouchableOpacity style={styles.actionButton}>
-                      <Heart size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                      <Bookmark size={20} color="#6B7280" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.actionButton}>
-                      <Share size={20} color="#6B7280" />
-                    </TouchableOpacity>
+          {loading ? (
+            <ActivityIndicator size="large" color="#8B5CF6" />
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              {filteredContent.map((item) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    router.push({
+                      pathname: '/movie-details',
+                      params: { item: JSON.stringify(item) }
+                    });
+                  }}
+                  key={item.id}
+                  style={styles.contentCard}
+                >
+                  <Image source={{ uri: item.thumbnail }} style={styles.contentImage} />
+                  <View style={styles.contentInfo}>
+                    <Text style={styles.contentTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={styles.metaText}>{item.genre}</Text>
                   </View>
-                </View>
-
-                <View style={styles.contentMeta}>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaLabel}>{item.platform}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Clock size={14} color="#6B7280" />
-                    <Text style={styles.metaText}>{item.duration}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Star size={14} color="#F59E0B" />
-                    <Text style={styles.metaText}>{item.rating}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Eye size={14} color="#6B7280" />
-                    <Text style={styles.metaText}>{item.views}</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.contentDescription}>{item.description}</Text>
-
-                <View style={styles.contentGenre}>
-                  <View style={styles.genreTag}>
-                    <Text style={styles.genreText}>{item.genre}</Text>
-                  </View>
-                  <View style={styles.genreTag}>
-                    <Text style={styles.genreText}>{item.year}</Text>
-                  </View>
-                  <View style={styles.genreTag}>
-                    <Text style={styles.genreText}>{item.type}</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.watchButton}>
-                  <LinearGradient
-                    colors={['#8B5CF6', '#A78BFA']}
-                    style={styles.watchButtonGradient}
-                  >
-                    <Play size={16} color="#FFFFFF" />
-                    <Text style={styles.watchButtonText}>Watch Now</Text>
-                  </LinearGradient>
                 </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Platform Recommendations */}
@@ -283,13 +174,11 @@ export default function DiscoverScreen() {
                   colors={[platform.color + '20', platform.color + '10']}
                   style={styles.platformGradient}
                 >
-                  {/* Render Icon */}
                   {platform.lib === 'FontAwesome' ? (
                     <FontAwesome name={platform.icon} size={28} color={platform.color} />
                   ) : (
                     <MaterialCommunityIcons name={platform.icon} size={28} color={platform.color} />
                   )}
-
                   <Text style={styles.platformName}>{platform.name}</Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -443,111 +332,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contentCard: {
-    flexDirection: 'row',
+    width: '48%', // two items per row
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
   },
   contentImage: {
-    width: 120,
-    height: 160,
+    width: '100%',
+    height: 200, // taller for poster look
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   contentInfo: {
-    flex: 1,
-    padding: 16,
-  },
-  contentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    padding: 8,
   },
   contentTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#111827',
-    flex: 1,
-    marginRight: 8,
-  },
-  contentActions: {
-    flexDirection: 'row',
-  },
-  actionButton: {
-    padding: 4,
-    marginLeft: 4,
+    marginBottom: 4,
   },
   contentMeta: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  metaItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-    marginBottom: 4,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
-    color: '#8B5CF6',
+    justifyContent: 'space-between',
   },
   metaText: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
-    marginLeft: 4,
   },
-  contentDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  contentGenre: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  genreTag: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  genreText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#6B7280',
-  },
-  watchButton: {
-    alignSelf: 'flex-start',
-  },
-  watchButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  watchButtonText: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-    marginLeft: 8,
-  },
+
   platformsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
