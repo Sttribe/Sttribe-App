@@ -31,7 +31,7 @@ import {
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { chatWithOpenAI, getApiKey, storeApiKey } from '../openaiService';
-import { API_BASE_URL } from '@env';
+// import { API_BASE_URL } from '@env';
 
 export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,7 +59,7 @@ export default function DiscoverScreen() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${API_BASE_URL}/api/free-streams`);
+        const res = await axios.get(`https/api/free-streams`);
         setFreeContent(res.data);
       } catch (error) {
         console.error("Error fetching free streams:", error);

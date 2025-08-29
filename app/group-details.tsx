@@ -16,7 +16,7 @@ import { ArrowLeft, Users, IndianRupee, Calendar, Settings, MessageCircle, Crown
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { getAuth } from 'firebase/auth';
 import axios from 'axios';
-import { API_BASE_URL } from '@env';
+// import { API_BASE_URL } from '@env';
 
 export default function GroupDetailsScreen() {
   const router = useRouter();
@@ -69,7 +69,7 @@ export default function GroupDetailsScreen() {
 
           // ✅ Fetch a single tribe by ID
           const tribesRes = await axios.get(
-            `${API_BASE_URL}/api/tribes/${id}`,
+            `https/api/tribes/${id}`,
             { headers: { Authorization: `Bearer ${idToken}` } }
           );
 
