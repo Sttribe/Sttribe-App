@@ -28,7 +28,7 @@ import {
 import { useRouter } from 'expo-router';
 import axios from "axios";
 import { getAuth } from "firebase/auth";
-import { API_BASE_URL } from "@env";
+// import { API_BASE_URL } from "@env";
 import Checkbox from "expo-checkbox";
 
 export default function CreateGroupScreen() {
