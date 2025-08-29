@@ -91,7 +91,7 @@ export default function ProfileScreen() {
       'Are you sure you want to logout?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => router.replace('/auth') }
+        { text: 'Logout', style: 'destructive', onPress: () => router.replace('/login') }
       ]
     );
   };

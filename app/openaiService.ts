@@ -2,17 +2,15 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const API_URL = 'https://api.openai.com/v1/chat/completions';
-
-const apiKey = process.env.OPENAI_API_KEY;
-console.log('api key : ', apiKey);
+const STORAGE_KEY = 'OPENAI_API_KEY'; // fixed key name
 
 // Store your API key securely
 export const storeApiKey = async (key) => {
-    await SecureStore.setItemAsync(apiKey, key);
+    await SecureStore.setItemAsync(STORAGE_KEY, key);
 };
 
 export const getApiKey = async () => {
-    return await SecureStore.getItemAsync(apiKey);
+    return await SecureStore.getItemAsync(STORAGE_KEY);
 };
 
 export const chatWithOpenAI = async (messages, apiKey) => {
@@ -21,7 +19,7 @@ export const chatWithOpenAI = async (messages, apiKey) => {
             API_URL,
             {
                 model: "gpt-3.5-turbo",
-                messages: messages,
+                messages,
                 temperature: 0.7,
             },
             {
