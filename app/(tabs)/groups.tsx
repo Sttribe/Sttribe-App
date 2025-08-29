@@ -23,7 +23,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getAuth } from 'firebase/auth';
 import axios from 'axios';
-// import { API_BASE_URL } from "@env";
+import { API_BASE_URL } from "@env";
 
 export default function GroupsScreen() {
   const router = useRouter();
@@ -45,7 +45,7 @@ export default function GroupsScreen() {
           const idToken = await currentUser.getIdToken();
 
           const tribesRes = await axios.get(
-            `https/api/tribes`,
+            `${API_BASE_URL}/api/tribes`,
             { headers: { Authorization: `Bearer ${idToken}` } }
           );
 

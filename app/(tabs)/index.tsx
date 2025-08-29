@@ -25,7 +25,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
 import { getAuth } from 'firebase/auth';
-// import { API_BASE_URL } from '@env';
+import { API_BASE_URL } from '@env';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -62,7 +62,7 @@ export default function HomeScreen() {
           setDashboardstats(res.data);
 
           const tribesRes = await axios.get(
-            `https/api/tribes`,
+            `${API_BASE_URL}/api/tribes`,
             { headers: { Authorization: `Bearer ${idToken}` } }
           );
 
