@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,91 +8,129 @@ import {
   SafeAreaView,
   Image,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Users, IndianRupee, Calendar, Settings, MessageCircle, Crown, UserPlus, Copy, Share, Bell, CreditCard, Shield, CircleCheck as CheckCircle, Clock, CircleAlert as AlertCircle, Wallet, Download } from 'lucide-react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { getAuth } from 'firebase/auth';
+import axios from 'axios';
+import { API_BASE_URL } from '@env';
 
 export default function GroupDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
+  // console.log("id from the parant : ", id)
+  const [groupData, setGroupData] = useState([]);
+  const [membersData, setMembersData] = useState([]);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
 
-  // Mock data - in real app, fetch based on id
-  const groupData = {
-    id: 1,
-    name: 'Netflix Squad',
-    platform: 'Netflix',
-    plan: 'Standard',
-    members: 4,
-    maxMembers: 4,
-    monthlyCost: 199,
-    personalCost: 49.75,
-    isOwner: true,
-    nextBilling: '2024-01-15',
-    createdDate: '2023-12-01',
-    groupCode: 'NF2024',
-    image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400',
-    color: '#E50914',
-    status: 'active',
-    totalCollected: 796, // 4 members * 199 = 796
-    availableBalance: 796,
+  const settings = {
     credentials: {
-      email: 'group@email.com',
-      password: '••••••••'
+      email: "example@email.com",
+      password: "********", // keep masked for display
     },
-    membersList: [
-      {
-        id: 1,
-        name: 'You',
-        email: 'your@email.com',
-        avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Owner',
-        joinedDate: '2023-12-01',
-        paymentStatus: 'paid',
-        isOwner: true,
-      },
-      {
-        id: 2,
-        name: 'Priya Sharma',
-        email: 'priya@email.com',
-        avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-05',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-      {
-        id: 3,
-        name: 'Amit Patel',
-        email: 'amit@email.com',
-        avatar: 'https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-10',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-      {
-        id: 4,
-        name: 'Sarah Khan',
-        email: 'sarah@email.com',
-        avatar: 'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-12',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-    ],
-    billingHistory: [
-      { date: '2024-01-01', amount: 199, status: 'paid', method: 'UPI' },
-      { date: '2023-12-01', amount: 199, status: 'paid', method: 'Card' },
-      { date: '2023-11-01', amount: 199, status: 'paid', method: 'UPI' },
-    ],
-    withdrawalHistory: [
-      { date: '2024-01-01', amount: 199, type: 'Netflix Subscription', status: 'completed' },
-      { date: '2023-12-01', amount: 199, type: 'Netflix Subscription', status: 'completed' },
-    ],
+    isOwner: true, // toggle to false to hide "Owner Actions"
+    settings: {
+      groupInfo: "Study Group - React Native",
+      notifications: true,
+      payment: "UPI / Card linked",
+    },
   };
+
+  const billing = {
+    id: "tribe123",
+    name: "React Native Tribe",
+    nextBilling: "2025-09-05T00:00:00Z",
+    personalCost: 499,
+    billingHistory: [
+      { date: "2025-08-05T00:00:00Z", method: "UPI", amount: 499 },
+      { date: "2025-07-05T00:00:00Z", method: "Credit Card", amount: 499 },
+      { date: "2025-06-05T00:00:00Z", method: "Wallet", amount: 499 }
+    ]
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+
+          if (!currentUser) {
+            console.error("No user is logged in");
+            return;
+          }
+
+          const idToken = await currentUser.getIdToken();
+
+          // ✅ Fetch a single tribe by ID
+          const tribesRes = await axios.get(
+            `${API_BASE_URL}/api/tribes/${id}`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+
+          const platformImages = {
+            Netflix: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Amazon Prime": "https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Disney+ Hotstar": "https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400",
+          };
+
+          const platformColors = {
+            Netflix: "#E50914",
+            "Amazon Prime": "#00A8E1",
+            "Disney+ Hotstar": "#113CCF",
+            Default: "#8B5CF6",
+          };
+
+          const tribe = tribesRes.data; // ✅ single object, not array
+          setMembersData(tribe.members);
+          const platform = tribe.platform || "";
+
+          const createdAt = tribe.createdAt?._seconds
+            ? new Date(tribe.createdAt._seconds * 1000)
+            : null;
+
+          const transformed = {
+            id: tribe.id,
+            name: tribe.name,
+            description: tribe.description,
+            members: tribe._count?.members ?? tribe.members.length,
+            owner:
+              tribe.members.find((m) => m.user.id === tribe.createdBy)?.user?.firstName ||
+              "Unknown",
+            image:
+              tribe.members[0]?.user?.profileImageUrl ||
+              platformImages[platform] ||
+              platformImages["Amazon Prime"],
+            color: platformColors[platform] || platformColors.Default,
+            isOwner: tribe.createdBy === currentUser.uid,
+            nextBilling: new Date(), // replace with real billing when backend provides
+            avatars: tribe.members
+              .map((m) => m.user?.profileImageUrl)
+              .filter(Boolean)
+              .slice(0, 5),
+            createdAt: createdAt
+              ? createdAt.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })
+              : " ",
+          };
+
+          setGroupData(transformed);
+        } catch (error) {
+          console.error("Error fetching groups:",);
+        }
+      };
+
+      fetchData();
+    }, [id])
+  );
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -102,8 +140,9 @@ export default function GroupDetailsScreen() {
     { id: 'settings', label: 'Settings' },
   ];
 
+
   const copyGroupCode = () => {
-    Alert.alert('Copied!', 'Group code copied to clipboard');
+    Alert.alert('Copied!', 'Group code copied to clipboa');
   };
 
   const shareGroup = () => {
@@ -116,9 +155,9 @@ export default function GroupDetailsScreen() {
       `Withdraw ₹${groupData.availableBalance} to purchase ${groupData.platform} subscription?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Withdraw', 
-          onPress: () => Alert.alert('Success', 'Funds withdrawn successfully!') 
+        {
+          text: 'Withdraw',
+          onPress: () => Alert.alert('Success', 'Funds withdrawn successfully!')
         },
       ]
     );
@@ -136,7 +175,8 @@ export default function GroupDetailsScreen() {
             <Image source={{ uri: groupData.image }} style={styles.groupImage} />
             <View style={styles.groupInfo}>
               <Text style={styles.groupName}>{groupData.name}</Text>
-              <Text style={styles.groupPlatform}>{groupData.platform} • {groupData.plan}</Text>
+              {/* <Text style={styles.groupPlatform}>{groupData.platform} • {groupData.plan}</Text> */}
+              <Text style={styles.groupPlatform}>{groupData.description}</Text>
               <View style={styles.statusBadge}>
                 <CheckCircle size={12} color="#10B981" />
                 <Text style={styles.statusText}>Active</Text>
@@ -158,7 +198,7 @@ export default function GroupDetailsScreen() {
         </View>
         <View style={styles.statCard}>
           <IndianRupee size={20} color="#10B981" />
-          <Text style={styles.statValue}>₹{groupData.personalCost.toFixed(0)}</Text>
+          {/* <Text style={styles.statValue}>₹{groupData.personalCost.toFixed(0)}</Text> */}
           <Text style={styles.statLabel}>Your Share</Text>
         </View>
         <View style={styles.statCard}>
@@ -200,7 +240,7 @@ export default function GroupDetailsScreen() {
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={() => router.push(`/chat?groupId=${groupData.id}`)}
         >
@@ -211,14 +251,14 @@ export default function GroupDetailsScreen() {
           <Share size={20} color="#10B981" />
           <Text style={styles.actionText}>Share Group</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        {/* <TouchableOpacity style={styles.actionButton}>
           <Bell size={20} color="#F59E0B" />
           <Text style={styles.actionText}>Notifications</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Group Code */}
-      <View style={styles.codeCard}>
+      {/* <View style={styles.codeCard}>
         <Text style={styles.codeTitle}>Group Code</Text>
         <View style={styles.codeContainer}>
           <Text style={styles.codeText}>{groupData.groupCode}</Text>
@@ -227,14 +267,17 @@ export default function GroupDetailsScreen() {
           </TouchableOpacity>
         </View>
         <Text style={styles.codeSubtitle}>Share this code with friends to invite them</Text>
-      </View>
+      </View> */}
     </View>
   );
 
   const renderMembers = () => (
     <View style={styles.tabContent}>
       {groupData.isOwner && (
-        <TouchableOpacity style={styles.inviteButton}>
+        <TouchableOpacity
+          style={styles.inviteButton}
+          onPress={() => setInviteModalVisible(true)}   // 👈 open modal
+        >
           <LinearGradient
             colors={['#8B5CF6', '#A78BFA']}
             style={styles.inviteButtonGradient}
@@ -245,34 +288,89 @@ export default function GroupDetailsScreen() {
         </TouchableOpacity>
       )}
 
-      {groupData.membersList.map((member) => (
+      {membersData.map((member) => (
         <View key={member.id} style={styles.memberCard}>
-          <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
+          <View style={styles.memberAvatarWrapper}>
+            {member?.user?.profileImageUrl ? (
+              <Image
+                source={{ uri: member.user.profileImageUrl }}
+                style={styles.memberAvatar}
+              />
+            ) : (
+              <View style={styles.fallbackAvatar}>
+                <Text style={styles.fallbackText}>
+                  {member?.user?.firstName?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={styles.memberInfo}>
             <View style={styles.memberHeader}>
-              <Text style={styles.memberName}>{member.name}</Text>
+              <Text style={styles.memberName}>{member.user?.firstName}</Text>
               {member.isOwner && <Crown size={14} color="#F59E0B" />}
             </View>
-            <Text style={styles.memberEmail}>{member.email}</Text>
+            <Text style={styles.memberEmail}>{member.user?.email}</Text>
             <Text style={styles.memberJoined}>
-              Joined {new Date(member.joinedDate).toLocaleDateString()}
+              Joined{" "}
+              {member?.joinedAt?._seconds
+                ? new Date(member.joinedAt._seconds * 1000).toLocaleDateString("en-IN", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+                : "N/A"}
             </Text>
           </View>
           <View style={styles.memberStatus}>
-            {member.paymentStatus === 'paid' ? (
+            {member.role === 'admin' ? (
               <View style={styles.paidStatus}>
-                <CheckCircle size={16} color="#10B981" />
-                <Text style={styles.paidText}>Paid</Text>
+                {/* <CheckCircle size={16} color="#10B981" /> */}
+                <Text style={styles.paidText}>{member.role}</Text>
               </View>
             ) : (
               <View style={styles.pendingStatus}>
-                <Clock size={16} color="#F59E0B" />
-                <Text style={styles.pendingText}>Pending</Text>
+                {/* <Clock size={16} color="#F59E0B" /> */}
+                <Text style={styles.pendingText}>{member.role}</Text>
               </View>
             )}
           </View>
         </View>
       ))}
+
+      <Modal
+        transparent={true}
+        visible={inviteModalVisible}
+        animationType="slide"
+        onRequestClose={() => setInviteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Invite Member</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Enter email or Number"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              placeholderTextColor="#888"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setInviteModalVisible(false)}>
+                <Text style={styles.cancelButton}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => {
+                console.log("Invite sent to:", inviteEmail); // 👈 Replace with API call
+                setInviteModalVisible(false);
+                setInviteEmail("");
+              }}>
+                <Text style={styles.inviteButtonText}>Send Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 
@@ -286,7 +384,7 @@ export default function GroupDetailsScreen() {
         >
           <Text style={styles.nextPaymentTitle}>Next Payment</Text>
           <Text style={styles.nextPaymentDate}>
-            {new Date(groupData.nextBilling).toLocaleDateString('en-US', {
+            {new Date(billing.nextBilling).toLocaleDateString('en-US', {
               month: 'long',
               day: 'numeric',
               year: 'numeric'
@@ -294,7 +392,7 @@ export default function GroupDetailsScreen() {
           </Text>
           <View style={styles.nextPaymentAmount}>
             <IndianRupee size={20} color="#FFFFFF" />
-            <Text style={styles.nextPaymentAmountText}>₹{groupData.personalCost.toFixed(0)}</Text>
+            <Text style={styles.nextPaymentAmountText}>₹{billing.personalCost.toFixed(0)}</Text>
           </View>
           <TouchableOpacity style={styles.payNowButton}>
             <Text style={styles.payNowText}>Pay Now</Text>
@@ -304,7 +402,7 @@ export default function GroupDetailsScreen() {
 
       {/* Billing History */}
       <Text style={styles.sectionTitle}>Billing History</Text>
-      {groupData.billingHistory.map((bill, index) => (
+      {billing.billingHistory.map((bill, index) => (
         <View key={index} style={styles.billCard}>
           <View style={styles.billIcon}>
             <CreditCard size={20} color="#8B5CF6" />
@@ -398,11 +496,11 @@ export default function GroupDetailsScreen() {
         <View style={styles.credentialCard}>
           <View style={styles.credentialRow}>
             <Text style={styles.credentialLabel}>Email</Text>
-            <Text style={styles.credentialValue}>{groupData.credentials.email}</Text>
+            <Text style={styles.credentialValue}>{settings.credentials.email}</Text>
           </View>
           <View style={styles.credentialRow}>
             <Text style={styles.credentialLabel}>Password</Text>
-            <Text style={styles.credentialValue}>{groupData.credentials.password}</Text>
+            <Text style={styles.credentialValue}>{settings.credentials.password}</Text>
           </View>
           <TouchableOpacity style={styles.viewCredentialsButton}>
             <Shield size={16} color="#8B5CF6" />
@@ -427,7 +525,7 @@ export default function GroupDetailsScreen() {
         </TouchableOpacity>
       </View>
 
-      {groupData.isOwner && (
+      {settings.isOwner && (
         <View style={styles.settingsSection}>
           <Text style={styles.sectionTitle}>Owner Actions</Text>
           <TouchableOpacity style={[styles.settingItem, styles.dangerItem]}>
@@ -482,7 +580,7 @@ export default function GroupDetailsScreen() {
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'billing' && renderBilling()}
-        {activeTab === 'wallet' && renderWallet()}
+        {/* {activeTab === 'wallet' && renderWallet()} */}
         {activeTab === 'settings' && renderSettings()}
       </ScrollView>
     </SafeAreaView>
@@ -764,6 +862,24 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  memberAvatarWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: "#89a28a8a", // or any default color
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 18,
+  },
   memberAvatar: {
     width: 50,
     height: 50,
@@ -818,6 +934,54 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     marginLeft: 4,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)", // dim background
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 15,
+    textAlign: "center",
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 20,
+    color: "#333",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 20,
+  },
+  cancelButton: {
+    fontSize: 16,
+    color: "#999",
+    fontWeight: "500",
+  },
+  // inviteButtonText: {
+  //   fontSize: 16,
+  //   color: "#007BFF",
+  //   fontWeight: "600",
+  // },
   nextPaymentCard: {
     borderRadius: 16,
     overflow: 'hidden',

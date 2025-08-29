@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,9 @@ import {
   TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  Plus, 
-  Users, 
+import {
+  Plus,
+  Users,
   Search,
   MessageCircle,
   Settings,
@@ -20,69 +20,94 @@ import {
   Calendar,
   IndianRupee
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { getAuth } from 'firebase/auth';
+import axios from 'axios';
+import { API_BASE_URL } from "@env";
 
 export default function GroupsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [myGroups, setMyGroups] = useState([]);
 
-  const myGroups = [
-    {
-      id: 1,
-      name: 'Netflix Squad',
-      platform: 'Netflix',
-      members: 4,
-      maxMembers: 4,
-      monthlyCost: 199,
-      personalCost: 49.75,
-      isOwner: true,
-      nextBilling: '2024-01-15',
-      image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400',
-      color: '#E50914',
-      avatars: [
-        'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=60',
-      ],
-    },
-    {
-      id: 2,
-      name: 'Prime Family',
-      platform: 'Amazon Prime',
-      members: 6,
-      maxMembers: 6,
-      monthlyCost: 999,
-      personalCost: 166.5,
-      isOwner: false,
-      nextBilling: '2024-01-20',
-      image: 'https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400',
-      color: '#00A8E1',
-      avatars: [
-        'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1040880/pexels-photo-1040880.jpeg?auto=compress&cs=tinysrgb&w=60',
-      ],
-    },
-    {
-      id: 3,
-      name: 'Disney+ Magic',
-      platform: 'Disney+ Hotstar',
-      members: 3,
-      maxMembers: 4,
-      monthlyCost: 299,
-      personalCost: 99.67,
-      isOwner: false,
-      nextBilling: '2024-01-25',
-      image: 'https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400',
-      color: '#1E40AF',
-      avatars: [
-        'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=60',
-        'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=60',
-      ],
-    },
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+
+          if (!currentUser) {
+            console.error("No user is logged in");
+            return;
+          }
+
+          const idToken = await currentUser.getIdToken();
+
+          const tribesRes = await axios.get(
+            `${API_BASE_URL}/api/tribes`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+
+          const platformImages = {
+            Netflix: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Amazon Prime": "https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Disney+ Hotstar": "https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400",
+          };
+
+          const platformColors = {
+            Netflix: "#E50914",
+            "Amazon Prime": "#00A8E1",
+            "Disney+ Hotstar": "#113CCF",
+            Default: "#8B5CF6"
+          };
+
+          const transformed = tribesRes.data.map((tribe) => {
+            const platform = tribe.platform || "";
+
+            // ✅ Convert Firestore timestamp to JS Date
+            const createdAt = tribe.createdAt?._seconds
+              ? new Date(tribe.createdAt._seconds * 1000)
+              : null;
+
+            return {
+              id: tribe.id,
+              name: tribe.name,
+              members: tribe._count?.members ?? tribe.members.length,
+              owner:
+                tribe.members.find((m) => m.user.id === tribe.createdBy)?.user?.firstName ||
+                "Unknown",
+              image:
+                tribe.members[0]?.user?.profileImageUrl ||
+                platformImages[platform] ||
+                platformImages["Amazon Prime"],
+              color: platformColors[platform] || platformColors.Default,
+              isOwner: tribe.createdBy === currentUser.uid,
+              nextBilling: new Date(), // replace with real billing when backend provides
+              avatars: tribe.members
+                .map((m) => m.user?.profileImageUrl)
+                .filter(Boolean)
+                .slice(0, 5),
+
+              // ✅ Add createdAt as readable date
+              createdAt: createdAt
+                ? createdAt.toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+                : " ",
+            };
+          });
+
+          setMyGroups(transformed);
+        } catch (error) {
+          console.error("Error fetching groups:", error);
+        }
+      };
+
+      fetchData();
+    }, []));
 
   const joinableGroups = [
     {
@@ -122,7 +147,7 @@ export default function GroupsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Groups</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.createButton}
             onPress={() => router.push('/create-group')}
           >
@@ -148,8 +173,8 @@ export default function GroupsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>My Groups ({myGroups.length})</Text>
           {myGroups.map((group) => (
-            <TouchableOpacity 
-              key={group.id} 
+            <TouchableOpacity
+              key={group.id}
               style={styles.groupCard}
               onPress={() => router.push(`/group-details?id=${group.id}`)}
             >
@@ -162,12 +187,12 @@ export default function GroupsScreen() {
                       <Crown size={16} color="#F59E0B" />
                     )}
                   </View>
-                  <Text style={styles.groupPlatform}>{group.platform}</Text>
+                  {/* <Text style={styles.groupPlatform}>{group.platform}</Text> */}
                   <View style={styles.groupMeta}>
                     <View style={styles.groupMembers}>
                       <Users size={14} color="#6B7280" />
                       <Text style={styles.groupMemberCount}>
-                        {group.members}/{group.maxMembers}
+                        {group.members} members
                       </Text>
                     </View>
                     <View style={styles.nextBilling}>
@@ -181,7 +206,7 @@ export default function GroupsScreen() {
               </View>
 
               <View style={styles.groupActions}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.actionButton}
                   onPress={() => router.push(`/chat?groupId=${group.id}`)}
                 >
@@ -194,21 +219,17 @@ export default function GroupsScreen() {
 
               <View style={styles.costInfo}>
                 <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Your Share</Text>
+                  <Text style={styles.costLabel}>Subscriptions</Text>
                   <View style={styles.costValue}>
-                    <IndianRupee size={14} color="#059669" />
-                    <Text style={styles.costAmount}>
-                      {group.personalCost.toFixed(0)}
-                    </Text>
+                    {/* <IndianRupee size={14} color="#059669" /> */}
+                    <Text style={styles.costAmount}></Text>
                   </View>
                 </View>
                 <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Total</Text>
+                  <Text style={styles.costLabel}>Created On</Text>
                   <View style={styles.costValue}>
-                    <IndianRupee size={14} color="#6B7280" />
-                    <Text style={styles.totalAmount}>
-                      {group.monthlyCost}
-                    </Text>
+                    {/* <IndianRupee size={14} color="#6B7280" /> */}
+                    <Text style={styles.totalAmount}>{group.createdAt}</Text>
                   </View>
                 </View>
               </View>
@@ -234,10 +255,10 @@ export default function GroupsScreen() {
                   colors={[group.color + '20', group.color + '10']}
                   style={styles.progressBar}
                 >
-                  <View 
+                  <View
                     style={[
                       styles.progressFill,
-                      { 
+                      {
                         width: `${(group.members / group.maxMembers) * 100}%`,
                         backgroundColor: group.color,
                       }
@@ -400,6 +421,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#111827',
     marginRight: 8,
+    marginBottom: 2
   },
   groupPlatform: {
     fontSize: 14,
@@ -416,10 +438,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 5,
   },
   groupMembers: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 5,
   },
   groupMemberCount: {
     fontSize: 12,
@@ -440,7 +464,7 @@ const styles = StyleSheet.create({
   groupActions: {
     flexDirection: 'row',
     position: 'absolute',
-    top: 16,
+    top: 12,
     right: 16,
   },
   actionButton: {
@@ -462,7 +486,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   costValue: {
     flexDirection: 'row',
@@ -484,6 +508,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginLeft: 15,
   },
   memberAvatars: {
     flexDirection: 'row',
