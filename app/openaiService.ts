@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 const API_URL = 'https://api.openai.com/v1/chat/completions';
 
+// https://api-s2onatgxwq-uc.a.run.app
+
 const apiKey = process.env.OPENAI_API_KEY;
 console.log('api key : ', apiKey);
 
