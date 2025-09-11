@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,121 +8,381 @@ import {
   SafeAreaView,
   Image,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Users, IndianRupee, Calendar, Settings, MessageCircle, Crown, UserPlus, Copy, Share, Bell, CreditCard, Shield, CircleCheck as CheckCircle, Clock, CircleAlert as AlertCircle, Wallet, Download } from 'lucide-react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft, Users, IndianRupee, Calendar, Settings, MessageCircle, Crown, UserPlus, Copy, Share, Bell, CreditCard, Shield, CircleCheck as CheckCircle, Clock, CircleAlert as AlertCircle, Wallet, Download, XCircle, Star, Check } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { getAuth } from 'firebase/auth';
+import axios from 'axios';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 export default function GroupDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
+  // console.log("id from the parant : ", id)
+  const [groupData, setGroupData] = useState({});
+  const [membersData, setMembersData] = useState([]);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [billing, setBilling] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [noOfSubs, setnoOfSubs] = useState([]);
+  const [isAddPlatformModalVisible, setAddPlatformModalVisible] = useState(false);
+  const [viewCredentialsModalVisible, setViewCredentialsModalVisible] = useState(false);
+  const [modalStep, setModalStep] = useState("select");
+  const [perMemberCost, setPerMemberCost] = useState(0);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState(null);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [platforms, setPlatforms] = useState([]);
+  const [processing, setProcessing] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
-  // Mock data - in real app, fetch based on id
-  const groupData = {
-    id: 1,
-    name: 'Netflix Squad',
-    platform: 'Netflix',
-    plan: 'Standard',
-    members: 4,
-    maxMembers: 4,
-    monthlyCost: 199,
-    personalCost: 49.75,
-    isOwner: true,
-    nextBilling: '2024-01-15',
-    createdDate: '2023-12-01',
-    groupCode: 'NF2024',
-    image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400',
-    color: '#E50914',
-    status: 'active',
-    totalCollected: 796, // 4 members * 199 = 796
-    availableBalance: 796,
+
+  // console.log("hii :", id);
+
+  const selectedPlatformObj = platforms.find(p => p.id === selectedPlatform);
+  const selectedPlanObj = selectedPlatformObj?.plans.find(pl => pl.planName === selectedPlan);
+
+  const settings = {
     credentials: {
-      email: 'group@email.com',
-      password: '••••••••'
+      email: "example@email.com",
+      password: "********", // keep masked for display
     },
-    membersList: [
-      {
-        id: 1,
-        name: 'You',
-        email: 'your@email.com',
-        avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Owner',
-        joinedDate: '2023-12-01',
-        paymentStatus: 'paid',
-        isOwner: true,
-      },
-      {
-        id: 2,
-        name: 'Priya Sharma',
-        email: 'priya@email.com',
-        avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-05',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-      {
-        id: 3,
-        name: 'Amit Patel',
-        email: 'amit@email.com',
-        avatar: 'https://images.pexels.com/photos/1681010/pexels-photo-1681010.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-10',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-      {
-        id: 4,
-        name: 'Sarah Khan',
-        email: 'sarah@email.com',
-        avatar: 'https://images.pexels.com/photos/1043471/pexels-photo-1043471.jpeg?auto=compress&cs=tinysrgb&w=60',
-        role: 'Member',
-        joinedDate: '2023-12-12',
-        paymentStatus: 'paid',
-        isOwner: false,
-      },
-    ],
-    billingHistory: [
-      { date: '2024-01-01', amount: 199, status: 'paid', method: 'UPI' },
-      { date: '2023-12-01', amount: 199, status: 'paid', method: 'Card' },
-      { date: '2023-11-01', amount: 199, status: 'paid', method: 'UPI' },
-    ],
-    withdrawalHistory: [
-      { date: '2024-01-01', amount: 199, type: 'Netflix Subscription', status: 'completed' },
-      { date: '2023-12-01', amount: 199, type: 'Netflix Subscription', status: 'completed' },
-    ],
+    isOwner: true, // toggle to false to hide "Owner Actions"
+    settings: {
+      groupInfo: "Study Group - React Native",
+      notifications: true,
+      payment: "UPI / Card linked",
+    },
   };
+
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const idToken = await currentUser.getIdToken();
+          const profileResponse = await axios.get(
+            'https://api-s2onatgxwq-uc.a.run.app/api/user/profile',
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          setUserProfile(profileResponse.data);
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  const handlePayment = async () => {
+    setProcessing(true);
+
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const idToken = await currentUser.getIdToken();
+
+      // Create Razorpay order - FIXED URL
+      const orderResponse = await axios.post(
+        'https://api-s2onatgxwq-uc.a.run.app/api/razorpay/create-order',
+        {
+          amount: Math.round(perMemberCost * 100), // Convert to paise
+          currency: "INR",
+          receipt: `tribe_${id}_${Date.now()}`,
+        },
+        {
+          headers: { Authorization: `Bearer ${idToken}` }
+        }
+      );
+
+      const orderData = orderResponse.data;
+
+      // Use your backend endpoint for payment processing
+      const paymentPageUrl = `https://api-s2onatgxwq-uc.a.run.app/api/payment/checkout?order_id=${orderData.id}&amount=${orderData.amount}&tribe_id=${id}`;
+
+      // Open in browser
+      const result = await WebBrowser.openBrowserAsync(paymentPageUrl, {
+        toolbarColor: '#6366f1',
+        controlsColor: '#ffffff'
+      });
+
+      // Check if payment was successful
+      if (result.type === 'success') {
+        // Verify payment on your backend
+        await verifyPayment(orderData.id);
+      }
+
+    } catch (error) {
+      console.error('Payment error:', error);
+      Alert.alert('Error', 'Payment failed. Please try again.');
+      setProcessing(false);
+    }
+  };
+
+  const verifyPayment = async (orderId) => {
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const idToken = await currentUser.getIdToken();
+
+      const verifyResponse = await axios.post(
+        'https://api-s2onatgxwq-uc.a.run.app/api/razorpay/verify-payment',
+        { order_id: orderId },
+        { headers: { Authorization: `Bearer ${idToken}` } }
+      );
+
+      if (verifyResponse.data.success) {
+        // Process the purchase
+        await processPurchase();
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      setProcessing(false);
+    }
+  };
+
+  const processPurchase = async () => {
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const idToken = await currentUser.getIdToken();
+
+      const purchaseResponse = await axios.post(
+        'https://api-s2onatgxwq-uc.a.run.app/api/purchase',
+        {
+          tribeId: id,
+          selectedPlans: [{
+            platformId: selectedPlatform,
+            platformName: selectedPlatformObj?.name,
+            planName: selectedPlanObj?.planName,
+            duration: selectedPlanObj?.duration,
+            price: selectedPlanObj?.price,
+            credentials: {
+              email: username,
+              password: password,
+              profileName: profileName,
+              notes: notes,
+            },
+          }],
+          totalAmount: selectedPlanObj?.price,
+          splitAmount: perMemberCost,
+          memberCount: membersData.length,
+        },
+        {
+          headers: { Authorization: `Bearer ${idToken}` }
+        }
+      );
+
+      Alert.alert(
+        'Success!',
+        'Subscription created successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setAddPlatformModalVisible(false);
+              resetModalState();
+              // You might want to refresh your data here
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Purchase error:', error);
+      Alert.alert('Error', 'Failed to process purchase. Please contact support.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const resetModalState = () => {
+    setSelectedPlatform(null);
+    setSelectedPlan(null);
+    setUsername("");
+    setPassword("");
+    setProfileName("");
+    setNotes("");
+    setModalStep("select");
+  };
+
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+          setCurrentUserId(currentUser.uid);
+
+          if (!currentUser) {
+            console.error("No user is logged in");
+            return;
+          }
+
+          const idToken = await currentUser.getIdToken();
+
+          // ✅ Fetch a single tribe by ID
+          const tribesRes = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/tribes/${id}`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+
+          const platformImages = {
+            Netflix: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Amazon Prime": "https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Disney+ Hotstar": "https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400",
+          };
+
+          const platformColors = {
+            Netflix: "#E50914",
+            "Amazon Prime": "#00A8E1",
+            "Disney+ Hotstar": "#113CCF",
+            Default: "#8B5CF6",
+          };
+
+          const tribe = tribesRes.data; // ✅ single object, not array
+          setMembersData(tribe.members);
+          const platform = tribe.platform || "";
+
+          const createdAt = tribe.createdAt?._seconds
+            ? new Date(tribe.createdAt._seconds * 1000)
+            : null;
+
+          const transformed = {
+            id: tribe.id,
+            name: tribe.name,
+            description: tribe.description,
+            members: tribe._count?.members ?? tribe.members.length,
+            owner:
+              tribe.members.find((m) => m.user.id === tribe.createdBy)?.user?.firstName ||
+              "Unknown",
+            image:
+              tribe.members[0]?.user?.profileImageUrl ||
+              platformImages[platform] ||
+              platformImages["Amazon Prime"],
+            color: platformColors[platform] || platformColors.Default,
+            isOwner: tribe.createdBy === currentUser.uid,
+            nextBilling: new Date(), // replace with real billing when backend provides
+            avatars: tribe.members
+              .map((m) => m.user?.profileImageUrl)
+              .filter(Boolean)
+              .slice(0, 5),
+            createdAt: createdAt
+              ? createdAt.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })
+              : " ",
+          };
+          setGroupData(transformed);
+
+          const ottServicesRes = await axios.get(`https://api-s2onatgxwq-uc.a.run.app/api/ott-services`, {
+            headers: { Authorization: `Bearer ${idToken}` }
+          });
+          setPlatforms(ottServicesRes.data);
+
+          const { data } = await axios.get(
+            "https://api-s2onatgxwq-uc.a.run.app/api/subscriptions",
+            { headers: { Authorization: `Bearer ${idToken}` } } // add your token
+          );
+          // assuming API returns an array of subscriptions, pick the first one
+          const subscription = data.find(
+            (sub) => sub.tribe.id === id
+          );
+          if (!subscription) {
+            console.warn("No subscription found for tribe:", id);
+            return;
+          }
+          setnoOfSubs(subscription.ottService);
+          console.log("No Of Subs : ", subscription.ottService);
+          const tribeMembers = subscription.tribe.members || [];
+          setSubscription(subscription);
+          // map payments with user info
+          const paymentsWithNames = subscription.payments.map((p) => {
+            const member = tribeMembers.find((m) => m.userId === p.userId);
+            return {
+              id: p.id,
+              amount: parseFloat(p.amount).toFixed(2),
+              date: new Date(p.createdAt._seconds * 1000).toLocaleDateString(),
+              method: p.stripePaymentIntentId, // or dynamic if you have it
+              status: p.status,
+              userName: member ? `${member.user.firstName} ${member.user.lastName}` : "Unknown User",
+              profileImageUrl: member?.user?.profileImageUrl || null,
+            };
+          });
+
+          // now you can set billing
+          const newBilling = {
+            nextBilling: subscription.renewalDate?._seconds
+              ? subscription.renewalDate._seconds * 1000
+              : null,
+            billingHistory: paymentsWithNames,
+          };
+          setBilling(newBilling);
+          console.log("Updated billing:", newBilling);
+          // compute personal cost = monthlyPrice / number of members
+          const memberCount = subscription.tribe.memberIds.length;
+          const personalCost = subscription.ottService.monthlyPrice / memberCount;
+
+        } catch (error) {
+          console.error("Error fetching groups:",);
+        }
+      };
+
+      fetchData();
+    }, [id])
+  );
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'members', label: 'Members' },
     { id: 'billing', label: 'Billing' },
-    { id: 'wallet', label: 'Wallet' },
-    { id: 'settings', label: 'Settings' },
+    { id: 'subscriptions', label: 'subscriptions' },
+    ...(groupData.isOwner
+      ? [{ id: 'settings', label: 'Settings' }]
+      : []),
   ];
 
-  const copyGroupCode = () => {
-    Alert.alert('Copied!', 'Group code copied to clipboard');
+  const getFAIconName = (iconClass: string) => {
+    if (!iconClass) return null;
+    const parts = iconClass.split(" ");
+    return parts.length > 1 ? parts[1].replace("fa-", "") : null;
   };
 
   const shareGroup = () => {
     Alert.alert('Share Group', 'Share link copied to clipboard');
   };
 
-  const handleWithdraw = () => {
-    Alert.alert(
-      'Withdraw Funds',
-      `Withdraw ₹${groupData.availableBalance} to purchase ${groupData.platform} subscription?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Withdraw', 
-          onPress: () => Alert.alert('Success', 'Funds withdrawn successfully!') 
-        },
-      ]
-    );
-  };
+  useEffect(() => {
+    if (selectedPlanObj?.price && membersData.length > 0) {
+      const totalCost = Number(selectedPlanObj.price) + 5;
+      const splitCost = totalCost / membersData.length;
+      setPerMemberCost(splitCost.toFixed(2));
+    } else {
+      setPerMemberCost(0);
+    }
+  }, [selectedPlanObj, membersData]);
+
+  const handleAddOttPlatform = () => {
+    setAddPlatformModalVisible(true);
+  }
 
   const renderOverview = () => (
     <View style={styles.tabContent}>
@@ -136,7 +396,8 @@ export default function GroupDetailsScreen() {
             <Image source={{ uri: groupData.image }} style={styles.groupImage} />
             <View style={styles.groupInfo}>
               <Text style={styles.groupName}>{groupData.name}</Text>
-              <Text style={styles.groupPlatform}>{groupData.platform} • {groupData.plan}</Text>
+              {/* <Text style={styles.groupPlatform}>{groupData.platform} • {groupData.plan}</Text> */}
+              <Text style={styles.groupPlatform}>{groupData.description}</Text>
               <View style={styles.statusBadge}>
                 <CheckCircle size={12} color="#10B981" />
                 <Text style={styles.statusText}>Active</Text>
@@ -153,46 +414,47 @@ export default function GroupDetailsScreen() {
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
           <Users size={20} color="#8B5CF6" />
-          <Text style={styles.statValue}>{groupData.members}/{groupData.maxMembers}</Text>
+          <Text style={styles.statValue}>{groupData.members}</Text>
           <Text style={styles.statLabel}>Members</Text>
         </View>
         <View style={styles.statCard}>
           <IndianRupee size={20} color="#10B981" />
-          <Text style={styles.statValue}>₹{groupData.personalCost.toFixed(0)}</Text>
-          <Text style={styles.statLabel}>Your Share</Text>
+          <Text style={styles.statValue}>₹{noOfSubs?.monthlyPrice ?? "0"}</Text>
+          <Text style={styles.statLabel}>Full Price</Text>
         </View>
         <View style={styles.statCard}>
           <Calendar size={20} color="#F59E0B" />
           <Text style={styles.statValue}>
-            {new Date(groupData.nextBilling).getDate()}
+            {billing?.nextBilling
+              ? new Date(billing.nextBilling).toLocaleDateString('en-US', {
+                month: 'numeric',
+                day: 'numeric',
+                year: 'numeric',
+              })
+              : "-/-/--"}
           </Text>
           <Text style={styles.statLabel}>Next Billing</Text>
         </View>
         <View style={styles.statCard}>
-          <Wallet size={20} color="#059669" />
-          <Text style={styles.statValue}>₹{groupData.availableBalance}</Text>
-          <Text style={styles.statLabel}>Available</Text>
+          <IndianRupee size={20} color="#10B981" />
+          <Text style={styles.statValue}>₹{billing?.billingHistory?.[0]?.amount ?? "0"}</Text>
+          <Text style={styles.statLabel}>Your Share</Text>
         </View>
       </View>
 
       {/* Admin Withdrawal Section */}
-      {groupData.isOwner && groupData.availableBalance > 0 && (
+      {groupData.isOwner && (
         <View style={styles.withdrawalCard}>
           <LinearGradient
             colors={['#059669', '#10B981']}
             style={styles.withdrawalGradient}
           >
-            <Text style={styles.withdrawalTitle}>Ready to Purchase</Text>
+            <Text style={styles.withdrawalTitle}>Ready to Purchase Subscriptions</Text>
             <Text style={styles.withdrawalSubtitle}>
-              All members have paid. You can now purchase the {groupData.platform} subscription.
+              You can now purchase the subscriptions.
             </Text>
-            <View style={styles.withdrawalAmount}>
-              <IndianRupee size={20} color="#FFFFFF" />
-              <Text style={styles.withdrawalAmountText}>₹{groupData.availableBalance}</Text>
-            </View>
-            <TouchableOpacity style={styles.withdrawButton} onPress={handleWithdraw}>
-              <Download size={16} color="#059669" />
-              <Text style={styles.withdrawButtonText}>Withdraw & Purchase</Text>
+            <TouchableOpacity style={styles.withdrawButton} onPress={handleAddOttPlatform}>
+              <Text style={styles.withdrawButtonText}>Purchase Subscriptions</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>
@@ -200,7 +462,7 @@ export default function GroupDetailsScreen() {
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={() => router.push(`/chat?groupId=${groupData.id}`)}
         >
@@ -211,14 +473,14 @@ export default function GroupDetailsScreen() {
           <Share size={20} color="#10B981" />
           <Text style={styles.actionText}>Share Group</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        {/* <TouchableOpacity style={styles.actionButton}>
           <Bell size={20} color="#F59E0B" />
           <Text style={styles.actionText}>Notifications</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Group Code */}
-      <View style={styles.codeCard}>
+      {/* <View style={styles.codeCard}>
         <Text style={styles.codeTitle}>Group Code</Text>
         <View style={styles.codeContainer}>
           <Text style={styles.codeText}>{groupData.groupCode}</Text>
@@ -227,14 +489,18 @@ export default function GroupDetailsScreen() {
           </TouchableOpacity>
         </View>
         <Text style={styles.codeSubtitle}>Share this code with friends to invite them</Text>
-      </View>
+      </View> */}
+      {renderPlatformModal()}
     </View>
   );
 
   const renderMembers = () => (
     <View style={styles.tabContent}>
       {groupData.isOwner && (
-        <TouchableOpacity style={styles.inviteButton}>
+        <TouchableOpacity
+          style={styles.inviteButton}
+          onPress={() => setInviteModalVisible(true)}   // 👈 open modal
+        >
           <LinearGradient
             colors={['#8B5CF6', '#A78BFA']}
             style={styles.inviteButtonGradient}
@@ -245,151 +511,310 @@ export default function GroupDetailsScreen() {
         </TouchableOpacity>
       )}
 
-      {groupData.membersList.map((member) => (
+      {membersData.map((member) => (
         <View key={member.id} style={styles.memberCard}>
-          <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
+          <View style={styles.memberAvatarWrapper}>
+            {member?.user?.profileImageUrl ? (
+              <Image
+                source={{ uri: member.user.profileImageUrl }}
+                style={styles.memberAvatar}
+              />
+            ) : (
+              <View style={styles.fallbackAvatar}>
+                <Text style={styles.fallbackText}>
+                  {member?.user?.firstName?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={styles.memberInfo}>
             <View style={styles.memberHeader}>
-              <Text style={styles.memberName}>{member.name}</Text>
+              <Text style={styles.memberName}>{member.user?.firstName}</Text>
               {member.isOwner && <Crown size={14} color="#F59E0B" />}
             </View>
-            <Text style={styles.memberEmail}>{member.email}</Text>
+            <Text style={styles.memberEmail}>{member.user?.email}</Text>
             <Text style={styles.memberJoined}>
-              Joined {new Date(member.joinedDate).toLocaleDateString()}
+              Joined{" "}
+              {member?.joinedAt?._seconds
+                ? new Date(member.joinedAt._seconds * 1000).toLocaleDateString("en-IN", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+                : "N/A"}
             </Text>
           </View>
           <View style={styles.memberStatus}>
-            {member.paymentStatus === 'paid' ? (
+            {member.role === 'admin' ? (
               <View style={styles.paidStatus}>
-                <CheckCircle size={16} color="#10B981" />
-                <Text style={styles.paidText}>Paid</Text>
+                {/* <CheckCircle size={16} color="#10B981" /> */}
+                <Text style={styles.paidText}>{member.role}</Text>
               </View>
             ) : (
               <View style={styles.pendingStatus}>
-                <Clock size={16} color="#F59E0B" />
-                <Text style={styles.pendingText}>Pending</Text>
+                {/* <Clock size={16} color="#F59E0B" /> */}
+                <Text style={styles.pendingText}>{member.role}</Text>
               </View>
             )}
           </View>
         </View>
       ))}
+
+      <Modal
+        transparent={true}
+        visible={inviteModalVisible}
+        animationType="slide"
+        onRequestClose={() => setInviteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Invite Member</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Enter email or Number"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              placeholderTextColor="#888"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setInviteModalVisible(false)}>
+                <Text style={styles.cancelButton}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => {
+                console.log("Invite sent to:", inviteEmail); // 👈 Replace with API call
+                setInviteModalVisible(false);
+                setInviteEmail("");
+              }}>
+                <Text style={styles.inviteButtonText}>Send Invite</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 
-  const renderBilling = () => (
-    <View style={styles.tabContent}>
-      {/* Next Payment */}
-      <View style={styles.nextPaymentCard}>
-        <LinearGradient
-          colors={['#8B5CF6', '#A78BFA']}
-          style={styles.nextPaymentGradient}
-        >
-          <Text style={styles.nextPaymentTitle}>Next Payment</Text>
-          <Text style={styles.nextPaymentDate}>
-            {new Date(groupData.nextBilling).toLocaleDateString('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric'
-            })}
-          </Text>
-          <View style={styles.nextPaymentAmount}>
-            <IndianRupee size={20} color="#FFFFFF" />
-            <Text style={styles.nextPaymentAmountText}>₹{groupData.personalCost.toFixed(0)}</Text>
-          </View>
-          <TouchableOpacity style={styles.payNowButton}>
-            <Text style={styles.payNowText}>Pay Now</Text>
-          </TouchableOpacity>
-        </LinearGradient>
-      </View>
-
-      {/* Billing History */}
-      <Text style={styles.sectionTitle}>Billing History</Text>
-      {groupData.billingHistory.map((bill, index) => (
-        <View key={index} style={styles.billCard}>
-          <View style={styles.billIcon}>
-            <CreditCard size={20} color="#8B5CF6" />
-          </View>
-          <View style={styles.billInfo}>
-            <Text style={styles.billDate}>
-              {new Date(bill.date).toLocaleDateString()}
+  const renderBilling = () => {
+    if (!billing) {
+      return (
+        <Text style={{ textAlign: "center", marginTop: 20, color: "#6B7280" }}>
+          Loading billing info...
+        </Text>
+      );
+    }
+    return (
+      <View style={styles.tabContent}>
+        {/* Next Payment */}
+        <View style={styles.nextPaymentCard}>
+          <LinearGradient
+            colors={['#8B5CF6', '#A78BFA']}
+            style={styles.nextPaymentGradient}
+          >
+            <Text style={styles.nextPaymentTitle}>Next Payment</Text>
+            <Text style={styles.nextPaymentDate}>
+              {billing?.nextBilling
+                ? new Date(billing.nextBilling).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+                : " "}
             </Text>
-            <Text style={styles.billMethod}>Paid via {bill.method}</Text>
-          </View>
-          <View style={styles.billAmount}>
-            <Text style={styles.billAmountText}>₹{bill.amount}</Text>
-            <CheckCircle size={16} color="#10B981" />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
 
-  const renderWallet = () => (
-    <View style={styles.tabContent}>
-      {/* Wallet Balance */}
-      <View style={styles.walletCard}>
-        <LinearGradient
-          colors={['#059669', '#10B981']}
-          style={styles.walletGradient}
-        >
-          <Text style={styles.walletTitle}>Group Wallet</Text>
-          <View style={styles.walletBalance}>
-            <IndianRupee size={24} color="#FFFFFF" />
-            <Text style={styles.walletBalanceText}>₹{groupData.availableBalance}</Text>
-          </View>
-          <Text style={styles.walletSubtitle}>
-            Collected from {groupData.membersList.filter(m => m.paymentStatus === 'paid').length} members
+            <View style={styles.nextPaymentAmount}>
+              {/* <IndianRupee size={20} color="#FFFFFF" /> */}
+              <Text style={styles.nextPaymentAmountText}>
+                ₹{billing?.billingHistory?.[0]?.amount ?? "N/A"}
+              </Text>
+
+            </View>
+
+            <TouchableOpacity style={styles.payNowButton}>
+              <Text style={styles.payNowText}>Pay Now</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+
+        {/* Billing History */}
+        <Text style={styles.sectionTitle}>Billing History</Text>
+        {(billing?.billingHistory ?? []).filter(bill => bill.status === 'paid').length > 0 ? (
+          billing.billingHistory
+            .filter(bill => bill.status === 'paid')
+            .map((bill, index) => (
+              <View key={index} style={styles.billCard}>
+                <View style={styles.billIcon}>
+                  <CreditCard size={20} color="#8B5CF6" />
+                </View>
+                <View style={styles.billInfo}>
+                  <Text style={styles.billDate}>
+                    {bill.userName}
+                  </Text>
+                  <Text style={styles.billMethod}>
+                    Date: {bill.date || 'N/A'}
+                  </Text>
+                  <Text style={styles.billMethod}>
+                    Payment ID: {bill.method || 'N/A'}
+                  </Text>
+                </View>
+                <View style={styles.billAmount}>
+                  <Text style={styles.billAmountText}>
+                    ₹{bill.amount ? parseFloat(bill.amount).toFixed(2) : '0.00'}
+                  </Text>
+                  <CheckCircle size={16} color="#10B981" />
+                </View>
+              </View>
+            ))
+        ) : (
+          <Text style={{ color: '#9CA3AF', textAlign: 'center' }}>
+            No paid transactions found.
           </Text>
-        </LinearGradient>
+        )}
       </View>
+    );
+  };
 
-      {/* Wallet Stats */}
-      <View style={styles.walletStats}>
-        <View style={styles.walletStatCard}>
-          <Text style={styles.walletStatValue}>₹{groupData.totalCollected}</Text>
-          <Text style={styles.walletStatLabel}>Total Collected</Text>
-        </View>
-        <View style={styles.walletStatCard}>
-          <Text style={styles.walletStatValue}>₹{groupData.totalCollected - groupData.availableBalance}</Text>
-          <Text style={styles.walletStatLabel}>Total Spent</Text>
-        </View>
-      </View>
-
-      {/* Admin Actions */}
-      {groupData.isOwner && (
-        <View style={styles.adminActions}>
-          <TouchableOpacity style={styles.adminActionButton} onPress={handleWithdraw}>
-            <Download size={20} color="#059669" />
-            <Text style={styles.adminActionText}>Withdraw Funds</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.adminActionButton}>
-            <CreditCard size={20} color="#8B5CF6" />
-            <Text style={styles.adminActionText}>Purchase Subscription</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Withdrawal History */}
-      <Text style={styles.sectionTitle}>Withdrawal History</Text>
-      {groupData.withdrawalHistory.map((withdrawal, index) => (
-        <View key={index} style={styles.withdrawalHistoryCard}>
-          <View style={styles.withdrawalIcon}>
-            <Download size={20} color="#059669" />
-          </View>
-          <View style={styles.withdrawalInfo}>
-            <Text style={styles.withdrawalDate}>
-              {new Date(withdrawal.date).toLocaleDateString()}
+  const renderSubscriptions = () => {
+    // 🔹 Static sample data for now
+    const subsArray = Array.isArray(noOfSubs) ? noOfSubs : [noOfSubs];
+    return (
+      <View style={styles.tabContent}>
+        {/* Subscriptions Summary */}
+        <View style={styles.subCard}>
+          <LinearGradient
+            colors={["#4F46E5", "#6366F1"]}
+            style={styles.subGradient}
+          >
+            <Text style={styles.subTitle}>Active Subscriptions In Tribe</Text>
+            <View style={styles.subCountRow}>
+              <Star size={24} color="#FFFFFF" />
+              <Text style={styles.subCountText}>{subsArray.length}</Text>
+            </View>
+            <Text style={styles.subSubtitle}>
+              Across {groupData.members} members
             </Text>
-            <Text style={styles.withdrawalType}>{withdrawal.type}</Text>
-          </View>
-          <View style={styles.withdrawalAmount}>
-            <Text style={styles.withdrawalAmountText}>₹{withdrawal.amount}</Text>
-            <CheckCircle size={16} color="#10B981" />
-          </View>
+          </LinearGradient>
         </View>
-      ))}
-    </View>
-  );
+
+        {/* Subscriptions List */}
+        <Text style={styles.sectionTitle}>Your Subscriptions</Text>
+        {subsArray.map((sub, index) => {
+          const faName = getFAIconName(sub.iconClass);
+          return (
+            <View key={index} style={styles.subItemCard}>
+              <View style={styles.subIcon}>
+                {faName && typeof faName === "string" ? (
+                  <FontAwesome5
+                    name={faName}
+                    size={32}
+                    color={sub.color}
+                    style={styles.platformImage}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.platformImage,
+                      { color: sub.color, fontSize: 28, fontWeight: "bold" }
+                    ]}
+                  >
+                    {sub.name?.charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.subInfo}>
+                <Text style={styles.subName}>{sub.name}</Text>
+                <Text style={styles.subExpiry}>duration: {sub.duration}</Text>
+                <Text style={styles.subExpiry}>
+                  Expiry: {billing?.nextBilling
+                    ? new Date(billing.nextBilling).toLocaleDateString('en-US', {
+                      day: 'numeric',
+                      month: 'numeric',
+                      year: 'numeric',
+                    })
+                    : " "}
+                </Text>
+              </View>
+              <View style={styles.subStatus}>
+                <TouchableOpacity onPress={() => setViewCredentialsModalVisible(true)}>
+                  <Text>View Credentials</Text>
+                </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.subStatusText,
+                    { color: subscription.isActive === true ? "#10B981" : "#EF4444" },
+                  ]}
+                >
+                  {subscription.isActive === true ? "Active" : "Expired"}
+                </Text>
+              </View>
+            </View>
+          )
+        })}
+        {/* Admin Actions */}
+        {groupData.isOwner && (
+          (m) => m.userId === currentUserId && m.role === "admin"
+        ) && (
+            <View style={styles.adminActions}>
+              <TouchableOpacity onPress={handleAddOttPlatform} style={styles.adminActionButton}>
+                <CreditCard size={20} color="#4F46E5" />
+                <Text style={styles.adminActionText}>Add OTT Platforms To Trbe</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        <Modal
+          visible={viewCredentialsModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setViewCredentialsModalVisible(false)} // ✅ correct usage
+        >
+          <View style={styles.overlay}>
+            <View style={styles.modalContainer}>
+              {/* Title */}
+              <Text style={styles.title}>JioCinema Credentials</Text>
+              <Text style={styles.subtitle}>
+                Use these credentials to access your shared subscription.
+              </Text>
+
+              {/* Username */}
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>Email/Username:</Text>
+                <View style={styles.readonlyInput}>
+                  <Text style={styles.inputText}>Jiologin</Text>
+                </View>
+              </View>
+
+              {/* Password */}
+              <View style={styles.inputBox}>
+                <Text style={styles.label}>Password:</Text>
+                <View style={styles.readonlyInput}>
+                  <Text style={styles.inputText}>Jiologin</Text>
+                </View>
+              </View>
+
+              {/* Info Note */}
+              <View style={styles.noticeBox}>
+                <Text style={styles.noticeText}>
+                  <Text style={{ fontWeight: "bold", color: "red" }}>Important: </Text>
+                  Please don't change the password or profile settings. This is shared with other tribe members.
+                </Text>
+              </View>
+
+              {/* Buttons */}
+              <TouchableOpacity
+                style={styles.gotItButton}
+                onPress={() => setViewCredentialsModalVisible(false)} // ✅ close modal
+              >
+                <Text style={styles.gotItText}>Got it</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        {renderPlatformModal()}
+      </View >
+    );
+  };
 
   const renderSettings = () => (
     <View style={styles.tabContent}>
@@ -398,11 +823,11 @@ export default function GroupDetailsScreen() {
         <View style={styles.credentialCard}>
           <View style={styles.credentialRow}>
             <Text style={styles.credentialLabel}>Email</Text>
-            <Text style={styles.credentialValue}>{groupData.credentials.email}</Text>
+            <Text style={styles.credentialValue}>{settings.credentials.email}</Text>
           </View>
           <View style={styles.credentialRow}>
             <Text style={styles.credentialLabel}>Password</Text>
-            <Text style={styles.credentialValue}>{groupData.credentials.password}</Text>
+            <Text style={styles.credentialValue}>{settings.credentials.password}</Text>
           </View>
           <TouchableOpacity style={styles.viewCredentialsButton}>
             <Shield size={16} color="#8B5CF6" />
@@ -427,7 +852,7 @@ export default function GroupDetailsScreen() {
         </TouchableOpacity>
       </View>
 
-      {groupData.isOwner && (
+      {settings.isOwner && (
         <View style={styles.settingsSection}>
           <Text style={styles.sectionTitle}>Owner Actions</Text>
           <TouchableOpacity style={[styles.settingItem, styles.dangerItem]}>
@@ -438,6 +863,325 @@ export default function GroupDetailsScreen() {
       )}
     </View>
   );
+
+  const renderPlatformModal = () => {
+    return (
+      <Modal
+        visible={isAddPlatformModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setAddPlatformModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.modalContent}
+            showsVerticalScrollIndicator={true}
+            showsHorizontalScrollIndicator={true}>
+
+            {modalStep === "select" && (
+              <>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity onPress={() => setAddPlatformModalVisible(false)}>
+                    <ArrowLeft size={20} color={'#000'} />
+                  </TouchableOpacity>
+                  <Text style={styles.stepTitle}>Select Platform</Text>
+                </View>
+                <View style={styles.section}>
+                  <View style={styles.platformGrid}>
+                    {platforms.map(platform => {
+                      const faName = getFAIconName(platform.iconClass);
+                      return (
+                        <TouchableOpacity
+                          key={platform.id}
+                          style={[
+                            styles.platformCard,
+                            selectedPlatform === platform.id && styles.platformCardSelected
+                          ]}
+                          onPress={() => {
+                            if (selectedPlatform === platform.id) {
+                              setSelectedPlatform(null);
+                              setSelectedPlan(null);
+                            } else {
+                              setSelectedPlatform(platform.id);
+                              setSelectedPlan(null);
+                            }
+                          }}
+                        >
+                          {faName && typeof faName === "string" ? (
+                            <FontAwesome5
+                              name={faName}
+                              size={32}
+                              color={platform.color}
+                              style={styles.platformImage}
+                            />
+                          ) : (
+                            <Text
+                              style={[
+                                styles.platformImage,
+                                { color: platform.color, fontSize: 28, fontWeight: "bold" }
+                              ]}
+                            >
+                              {platform.name?.charAt(0).toUpperCase()}
+                            </Text>
+                          )}
+                          <Text style={styles.platformName}>{platform.name}</Text>
+                          {selectedPlatform === platform.id && (
+                            <View style={[styles.selectedIndicator, { backgroundColor: platform.color }]}>
+                              <Check size={16} color="#FFFFFF" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {selectedPlatform && (
+                  <View style={styles.section}>
+                    <Text style={styles.stepTitle}>Select Plan</Text>
+                    {platforms.find(p => p.id === selectedPlatform)?.plans.map(plan => (
+                      <TouchableOpacity
+                        key={plan.planName}
+                        style={[
+                          styles.planCard,
+                          selectedPlan === plan.planName && styles.planCardSelected
+                        ]}
+                        onPress={() => {
+                          setSelectedPlan(plan.planName);
+                        }}
+                      >
+                        <View style={styles.planInfo}>
+                          <Text style={styles.planName}>{plan.planName}</Text>
+                          <Text style={styles.planDetails}>
+                            {plan.maxScreens} {typeof plan.maxScreens === 'number' ? 'Screen' : ''} • {plan.videoQuality}
+                            {plan.duration && ` • ${plan.duration}`}
+                          </Text>
+                        </View>
+                        <View style={styles.planPrice}>
+                          <IndianRupee size={16} color="#111827" />
+                          <Text style={styles.planPriceText}>{plan.price}</Text>
+                          <Text style={styles.planPricePeriod}> /{plan.duration}</Text>
+                        </View>
+                        {selectedPlan === plan.planName && (
+                          <View style={styles.planSelectedIndicator}>
+                            <Check size={20} color="#8B5CF6" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {selectedPlan && (
+                  <TouchableOpacity
+                    style={[styles.continueButton, { backgroundColor: '#8B5CF6' }]}
+                    onPress={() => setModalStep("credentials")}
+                  >
+                    <Text style={styles.continueButtonText}>Continue to Credentials</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+
+            {modalStep === "credentials" && (
+              <View style={styles.credentialsWrapper}>
+                {/* Title */}
+                <Text style={styles.stepTitle}>Enter Credentials</Text>
+                <Text style={styles.stepDescription}>
+                  Enter login credentials for each platform. These will be securely shared with tribe members.
+                </Text>
+
+                {/* Card */}
+                <View style={styles.card}>
+                  {/* Platform header */}
+                  <View style={styles.cardHeader}>
+                    <View style={[styles.platformIconBox, { backgroundColor: selectedPlatformObj?.color }]}>
+                      {selectedPlatformObj?.iconClass ? (
+                        <FontAwesome5
+                          name={getFAIconName(selectedPlatformObj.iconClass)}
+                          size={20}
+                          color="#fff"
+                        />
+                      ) : (
+                        <Text style={styles.platformIcon}>
+                          {selectedPlatformObj?.name?.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTitle}>
+                        {selectedPlatformObj?.name} - {selectedPlanObj?.planName}
+                      </Text>
+                    </View>
+                    <Text style={styles.planPriceTag}>₹{selectedPlanObj?.price}/{selectedPlanObj?.duration}</Text>
+                  </View>
+
+                  {/* Input Fields */}
+                  <TextInput
+                    style={[styles.input, { height: 40 }]}
+                    placeholder="Email/Username *"
+                    placeholderTextColor="#999"
+                    value={username}
+                    onChangeText={setUsername}
+                  />
+
+                  <View style={styles.passwordField}>
+                    <TextInput
+                      style={[styles.passwordInput, { flex: 1, height: 40 }]}
+                      placeholder="Password *"
+                      placeholderTextColor="#999"
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                    />
+                    <TouchableOpacity
+                      style={styles.passwordToggle}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <Ionicons
+                        name={showPassword ? "eye-off" : "eye"}
+                        size={20}
+                        color="#6B7280"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <TextInput
+                    style={[styles.input, { height: 40 }]}
+                    placeholder="Profile Name"
+                    placeholderTextColor="#999"
+                    value={profileName}
+                    onChangeText={setProfileName}
+                  />
+
+                  <TextInput
+                    style={[styles.input, { height: 100 }]}
+                    placeholder="Additional Notes"
+                    placeholderTextColor="#999"
+                    multiline
+                    value={notes}
+                    onChangeText={setNotes}
+                  />
+                </View>
+
+                {/* Buttons */}
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => setModalStep("select")}
+                  >
+                    <Text style={styles.backButtonText}>Back to Platforms</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    disabled={!username.trim() || !password.trim()} // disable if empty
+                    style={[
+                      styles.continueButton,
+                      {
+                        backgroundColor:
+                          !username.trim() || !password.trim()
+                            ? "#A5B4FC" // lighter purple when disabled
+                            : "#8B5CF6", // active purple
+                        opacity: !username.trim() || !password.trim() ? 0.6 : 1,
+                      },
+                    ]}
+                    onPress={() => {
+                      setModalStep("payment");
+                    }}
+                  >
+                    <Text style={styles.continueButtonText}>Continue to Payment</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {modalStep === "payment" && (
+              <View style={styles.paymentContainer}>
+                <Text style={styles.paymentTitle}>Payment Summary</Text>
+
+                <View style={styles.summaryCard}>
+                  {/* Selected Platform */}
+                  <Text style={styles.sectionHeading}>Selected Platforms:</Text>
+                  <View style={styles.platformItem}>
+                    <View style={[styles.platformIconBox, { backgroundColor: selectedPlatformObj?.color }]}>
+                      {selectedPlatformObj?.iconClass ? (
+                        <FontAwesome5
+                          name={getFAIconName(selectedPlatformObj.iconClass)}
+                          size={20}
+                          color="#fff"
+                        />
+                      ) : (
+                        <Text style={styles.platformIcon}>
+                          {selectedPlatformObj?.name?.charAt(0).toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.cardTitle}>
+                      {selectedPlatformObj?.name} - {selectedPlanObj?.planName}
+                    </Text>
+                    <Text style={styles.planPriceTag}>₹{selectedPlanObj?.price}/{selectedPlanObj?.duration}</Text>
+                  </View>
+
+                  {/* Cost Breakdown */}
+                  <Text style={styles.costText}>Subscription Total: ₹{selectedPlanObj?.price}</Text>
+                  <Text style={styles.costText}>Platform Fee: {Number(selectedPlanObj.price) * 0.09}</Text>
+                  <Text style={styles.costTotal}>Total Amount: ₹{Number(selectedPlanObj?.price) + (Number(selectedPlanObj.price) * 0.09)}</Text>
+
+                  {/* Cost Split Details */}
+                  <View style={styles.splitBox}>
+                    <Text style={styles.sectionHeading}>Cost Split Details</Text>
+                    <Text style={styles.splitText}>Total Members: {membersData.length}</Text>
+                    <Text style={styles.splitText}>Total Cost (with fee): ₹{selectedPlanObj?.price
+                      ? (Number(selectedPlanObj.price) + (Number(selectedPlanObj.price) * 0.09)).toFixed(2)
+                      : "0"}</Text>
+                    <Text style={styles.splitText}>Cost per Member: ₹{perMemberCost}</Text>
+                    <Text style={styles.yourShare}>Your Share: ₹{perMemberCost}</Text>
+                  </View>
+
+                  {/* Info Note */}
+                  <View style={styles.infoNotice}>
+                    <Text style={styles.infoText}>
+                      You're paying only your share (₹{perMemberCost}). Other tribe members will be notified to pay their share.{"\n"}
+                      Note: You will get back your share
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Buttons */}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => setModalStep("credentials")}
+                  >
+                    <Text style={styles.backBtnText}>Back to Credentials</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.continueButton}
+                    onPress={handlePayment}
+                  >
+                    <Text style={styles.continueButtonText}>Pay Now</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                setAddPlatformModalVisible(false)
+                setSelectedPlatform(null);
+                setSelectedPlan(null);
+                setModalStep("select");
+              }}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+
+          </ScrollView>
+        </View>
+      </Modal>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -482,7 +1226,7 @@ export default function GroupDetailsScreen() {
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'billing' && renderBilling()}
-        {activeTab === 'wallet' && renderWallet()}
+        {activeTab === 'subscriptions' && renderSubscriptions()}
         {activeTab === 'settings' && renderSettings()}
       </ScrollView>
     </SafeAreaView>
@@ -764,6 +1508,24 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  memberAvatarWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: "#89a28a8a", // or any default color
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 18,
+  },
   memberAvatar: {
     width: 50,
     height: 50,
@@ -818,6 +1580,54 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     marginLeft: 4,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)", // dim background
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 15,
+    textAlign: "center",
+    color: "#333",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 20,
+    color: "#333",
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 20,
+  },
+  cancelButton: {
+    fontSize: 16,
+    color: "#999",
+    fontWeight: "500",
+  },
+  // inviteButtonText: {
+  //   fontSize: 16,
+  //   color: "#007BFF",
+  //   fontWeight: "600",
+  // },
   nextPaymentCard: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -916,69 +1726,82 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginRight: 8,
   },
-  walletCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  walletGradient: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  walletTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+  subCard: {
     marginBottom: 16,
+    borderRadius: 16,
+    overflow: "hidden",
   },
-  walletBalance: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  subGradient: {
+    padding: 20,
+    borderRadius: 16,
+  },
+  subTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
     marginBottom: 8,
   },
-  walletBalanceText: {
-    fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+  subCountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  subCountText: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "bold",
     marginLeft: 8,
   },
-  walletSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
-    opacity: 0.9,
+  subSubtitle: {
+    color: "#E0E7FF",
+    fontSize: 13,
+    marginTop: 6,
   },
-  walletStats: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  walletStatCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
+
+  subItemCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderRadius: 12,
-    alignItems: 'center',
-    marginHorizontal: 4,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  walletStatValue: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
+  subIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#EEF2FF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-  walletStatLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
-    marginTop: 4,
-    textAlign: 'center',
+  subInfo: {
+    flex: 1,
+  },
+  subName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  subExpiry: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  subStatus: {
+    paddingHorizontal: 10,
+  },
+  subStatusText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  noSubscriptions: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginTop: 12,
   },
   adminActions: {
     flexDirection: 'row',
@@ -1002,50 +1825,504 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalContainer: {
+    width: "85%",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 20,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 16,
+  },
+  inputBox: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  readonlyInput: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 6,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  inputText: {
+    fontSize: 14,
+    color: "#111827",
+  },
+  noticeBox: {
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  noticeText: {
+    fontSize: 13,
+    color: "#92400E",
+  },
+  gotItButton: {
+    backgroundColor: "#8B5CF6",
+    padding: 12,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  gotItText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
   adminActionText: {
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: '#111827',
     marginLeft: 8,
   },
-  withdrawalHistoryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  withdrawalIcon: {
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    paddingTop: 24,
+    maxHeight: '70%',
+    margin: 24,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 20,
+  },
+  section: {
+    paddingHorizontal: 20,
+    // marginBottom: 24,
+    // margin: 24,
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-SemiBold',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  platformGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  platformCard: {
+    width: '48%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+  },
+  platformCardSelected: {
+    borderColor: '#8B5CF6',
+  },
+  platformImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#059669' + '20',
+    marginBottom: 8,
+  },
+  platformName: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  withdrawalInfo: {
+  moreButton: {
+    marginTop: 10,
+    alignSelf: "center",
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#eee",
+  },
+  moreButtonText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 10,
+  },
+  skipText: {
+    marginLeft: 8,
+    fontSize: 16,
+  },
+  planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    position: 'relative',
+  },
+  planCardSelected: {
+    borderColor: '#8B5CF6',
+  },
+  planInfo: {
     flex: 1,
+    // maxWidth: '100%',
+    // flexWrap: 'wrap',
   },
-  withdrawalDate: {
+  planName: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#111827',
   },
-  withdrawalType: {
+  planDetails: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
-    marginTop: 2,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  planPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  planPriceText: {
+    fontSize: 18,
+    fontFamily: 'Inter-Bold',
+    color: '#111827',
+    marginLeft: 4,
+  },
+  planPricePeriod: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+  },
+  planSelectedIndicator: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  // continueButton: {
+  //   marginTop: 16,
+  //   paddingVertical: 14,
+  //   paddingHorizontal: 24,
+  //   borderRadius: 8,
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  // },
+  // continueButtonText: {
+  //   color: '#fff',
+  //   fontSize: 16,
+  //   fontFamily: 'Inter-Bold',
+  // },
+  continueButton: {
+    flex: 1,
+    paddingVertical: 12,
+    marginLeft: 8,
+    backgroundColor: "#8B5CF6",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  continueButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  credentialsWrapper: {
+    padding: 12,
+    backgroundColor: "#F9FAFB", // light background for mobile clarity
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 6,
+  },
+  stepDescription: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 14,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 1, // lighter elevation for mobile
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  platformIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  platformIcon: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  planPriceTag: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    marginBottom: 10,
+    color: "#111827",
+    backgroundColor: "#fff",
+  },
+  passwordField: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#111827",
+    paddingVertical: 10,
+  },
+  passwordToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  backButton: {
+    flex: 1,
+    // paddingVertical: 12,
+    marginRight: 8,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: 'center'
+  },
+  backButtonText: {
+    color: "#111827",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  closeButton: {
+    marginTop: 10,
+    backgroundColor: "#4F46E5",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    marginHorizontal: 60,
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
+  paymentContainer: {
+    // padding: 20,
+    // backgroundColor: "#fff",
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    // elevation: 3,
+    // marginVertical: 20,
+  },
+
+  paymentTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 16,
+  },
+
+  summaryCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+
+  platformItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  platformLogoBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  platformLogo: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  platformName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#111827",
+  },
+  platformPrice: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+
+  costText: {
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 4,
+  },
+  costTotal: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginTop: 4,
+    marginBottom: 12,
+  },
+
+  splitBox: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  splitText: {
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 2,
+  },
+  yourShare: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#8B5CF6",
+    marginTop: 6,
+  },
+
+  infoNotice: {
+    backgroundColor: "#EEF2FF",
+    borderRadius: 8,
+    padding: 12,
+  },
+  infoText: {
+    fontSize: 13,
+    color: "#4B5563",
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  backBtn: {
+    flex: 1,
+    backgroundColor: "#edf0faff",
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginRight: 8,
+    alignItems: "center",
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  payBtn: {
+    flex: 1,
+    backgroundColor: "#8B5CF6",
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginLeft: 8,
+    alignItems: "center",
+  },
+  payBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
   },
   settingsSection: {
     marginBottom: 24,

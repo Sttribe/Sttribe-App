@@ -16,7 +16,7 @@ import {
   PhoneAuthProvider,
   signInWithCredential,
 } from "firebase/auth";
-import { auth, firebaseConfig } from "../firebaseConfig"; 
+import { auth, firebaseConfig } from "../firebaseConfig";
 import { useRouter } from "expo-router";
 
 export default function AuthScreen() {

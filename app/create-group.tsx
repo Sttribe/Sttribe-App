@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   TextInput,
   Image,
   Alert,
+  KeyboardAvoidingView, Platform
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { 
+import {
   ArrowLeft,
   Users,
   IndianRupee,
@@ -24,7 +25,13 @@ import {
   Mail,
   MessageSquare
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import axios from "axios";
+import { getAuth } from "firebase/auth";
+// import { API_BASE_URL } from "@env";
+import Checkbox from "expo-checkbox";
+import { FontAwesome5 } from '@expo/vector-icons';
+
 
 export default function CreateGroupScreen() {
   const router = useRouter();
@@ -35,58 +42,44 @@ export default function CreateGroupScreen() {
   const [groupDescription, setGroupDescription] = useState('');
   const [memberContacts, setMemberContacts] = useState([{ type: 'email', value: '' }]);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [skip, setSkip] = useState(false);
+  const [platforms, setPlatforms] = useState([]);
+  const [showAll, setShowAll] = useState(false);
 
-  const platforms = [
-    {
-      id: 1,
-      name: 'Netflix',
-      plans: [
-        { id: 'mobile', name: 'Mobile', price: 149, screens: 1, quality: '480p' },
-        { id: 'basic', name: 'Basic', price: 199, screens: 1, quality: '720p' },
-        { id: 'standard', name: 'Standard', price: 499, screens: 2, quality: '1080p' },
-        { id: 'premium', name: 'Premium', price: 649, screens: 4, quality: '4K+HDR' },
-      ],
-      image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=200',
-      color: '#E50914',
-    },
-    {
-      id: 2,
-      name: 'Disney+ Hotstar',
-      plans: [
-        { id: 'mobile', name: 'Mobile', price: 499, screens: 1, quality: 'HD', duration: '1 Year' },
-        { id: 'super', name: 'Super', price: 899, screens: 2, quality: 'FHD', duration: '1 Year' },
-        { id: 'premium', name: 'Premium', price: 1499, screens: 4, quality: '4K', duration: '1 Year' },
-      ],
-      image: 'https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=200',
-      color: '#1E40AF',
-    },
-    {
-      id: 3,
-      name: 'Amazon Prime',
-      plans: [
-        { id: 'monthly', name: 'Monthly', price: 179, screens: 'Multiple', quality: 'FHD', duration: '1 Month' },
-        { id: 'quarterly', name: 'Quarterly', price: 459, screens: 'Multiple', quality: 'FHD', duration: '3 Months' },
-        { id: 'annual', name: 'Annual', price: 1499, screens: 'Multiple', quality: 'FHD', duration: '1 Year' },
-      ],
-      image: 'https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=200',
-      color: '#00A8E1',
-    },
-    {
-      id: 4,
-      name: 'Sony LIV',
-      plans: [
-        { id: 'mobile', name: 'Mobile', price: 599, screens: 1, quality: 'HD', duration: '1 Year' },
-        { id: 'premium', name: 'Premium', price: 999, screens: 2, quality: 'FHD', duration: '1 Year' },
-      ],
-      image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=200',
-      color: '#FF6B35',
-    },
-  ];
+
+  useFocusEffect(
+    useCallback(() => {
+
+      const OttfetchData = async () => {
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          Alert.alert("Error", "You must be logged in");
+          return;
+        }
+        const idToken = await currentUser.getIdToken();
+        const ottServicesRes = await axios.get(`https://api-s2onatgxwq-uc.a.run.app/api/ott-services`, {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+        setPlatforms(ottServicesRes.data);
+        console.log(ottServicesRes.data);
+      }
+      OttfetchData();
+    }, [])
+  )
+
+  const displayedPlatforms = showAll ? platforms : platforms.slice(0, 4);
+
+  const getFAIconName = (iconClass: string) => {
+    if (!iconClass) return null;
+    const parts = iconClass.split(" ");
+    return parts.length > 1 ? parts[1].replace("fa-", "") : null;
+  };
 
   const contactTypes = [
     { id: 'email', label: 'Email', icon: Mail, placeholder: 'Enter email address' },
     { id: 'phone', label: 'Phone', icon: Phone, placeholder: 'Enter mobile number' },
-    { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Enter WhatsApp number' },
+    // { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Enter WhatsApp number' },
   ];
 
   const addMemberContact = () => {
@@ -113,26 +106,59 @@ export default function CreateGroupScreen() {
     return plan ? Math.ceil(plan.price / parseInt(maxMembers)) : 0;
   };
 
-  const handleCreateGroup = () => {
-    if (!groupName.trim()) {
-      Alert.alert('Error', 'Please enter a group name');
-      return;
-    }
-    if (!selectedPlatform || !selectedPlan) {
-      Alert.alert('Error', 'Please select a platform and plan');
-      return;
-    }
+  const handleCreateGroup = async () => {
+    try {
+      if (!groupName.trim()) {
+        Alert.alert("Error", "Please enter a group name");
+        return;
+      }
+      // if (!selectedPlatform || !selectedPlan) {
+      //   Alert.alert("Error", "Please select a platform and plan");
+      //   return;
+      // }
 
-    Alert.alert(
-      'Group Created!',
-      'Your group has been created successfully. Members will be notified via their preferred contact method.',
-      [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
-      ]
-    );
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        Alert.alert("Error", "You must be logged in");
+        return;
+      }
+
+      // 🔹 Get Firebase token
+      const idToken = await currentUser.getIdToken();
+
+      // 🔹 Build invite emails string
+      const inviteEmails = memberContacts
+        .filter(c => c.type === "email" && c.value.trim()) // only emails
+        .map(c => c.value.trim())
+        .join(",");
+
+      // 🔹 Build request payload
+      const payload = {
+        name: groupName,
+        description: groupDescription,
+        maxMembers: parseInt(maxMembers),
+        inviteEmails,
+        isPrivate,
+        ...(selectedPlatform && { platform: platforms.find(p => p.id === selectedPlatform)?.name }),
+        ...(selectedPlan && { plan: selectedPlan }),
+      };
+
+      // 🔹 Send API request
+      const res = await axios.post(`https://api-s2onatgxwq-uc.a.run.app/api/tribes`, payload, {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      // console.log("Group created:", res.data);
+
+      Alert.alert(
+        "Success",
+        res.data.message || "Group created successfully!",
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      console.error("Error creating group:", error);
+      Alert.alert("Error", error.response?.data?.message || "Failed to create group");
+    }
   };
 
   const getContactIcon = (type) => {
@@ -147,249 +173,300 @@ export default function CreateGroupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#111827" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Group</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        {/* Step 1: Basic Info */}
-        <View style={styles.section}>
-          <Text style={styles.stepTitle}>Step 1: Basic Information</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Group Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Family Netflix, Friends Squad"
-              value={groupName}
-              onChangeText={setGroupName}
-            />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <ArrowLeft size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Create Group</Text>
+            <View style={{ width: 24 }} />
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Description (Optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Describe your group..."
-              value={groupDescription}
-              onChangeText={setGroupDescription}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Maximum Members</Text>
-            <View style={styles.memberSelector}>
-              {[2, 3, 4, 5, 6].map(num => (
-                <TouchableOpacity
-                  key={num}
-                  style={[
-                    styles.memberButton,
-                    maxMembers === num.toString() && styles.memberButtonSelected
-                  ]}
-                  onPress={() => setMaxMembers(num.toString())}
-                >
-                  <Text style={[
-                    styles.memberButtonText,
-                    maxMembers === num.toString() && styles.memberButtonTextSelected
-                  ]}>
-                    {num}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.privacyToggle}
-            onPress={() => setIsPrivate(!isPrivate)}
-          >
-            <View style={[styles.checkbox, isPrivate && styles.checkboxSelected]}>
-              {isPrivate && <Check size={16} color="#FFFFFF" />}
-            </View>
-            <View style={styles.privacyInfo}>
-              <Text style={styles.privacyTitle}>Private Group</Text>
-              <Text style={styles.privacySubtitle}>Only invited members can join</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Step 2: Platform Selection */}
-        <View style={styles.section}>
-          <Text style={styles.stepTitle}>Step 2: Select Platform</Text>
-          
-          <View style={styles.platformGrid}>
-            {platforms.map(platform => (
-              <TouchableOpacity
-                key={platform.id}
-                style={[
-                  styles.platformCard,
-                  selectedPlatform === platform.id && styles.platformCardSelected
-                ]}
-                onPress={() => {
-                  setSelectedPlatform(platform.id);
-                  setSelectedPlan(null);
-                }}
-              >
-                <Image source={{ uri: platform.image }} style={styles.platformImage} />
-                <Text style={styles.platformName}>{platform.name}</Text>
-                {selectedPlatform === platform.id && (
-                  <View style={[styles.selectedIndicator, { backgroundColor: platform.color }]}>
-                    <Check size={16} color="#FFFFFF" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Step 3: Plan Selection */}
-        {selectedPlatform && (
+          {/* Step 1: Basic Info */}
           <View style={styles.section}>
-            <Text style={styles.stepTitle}>Step 3: Select Plan</Text>
-            
-            {platforms.find(p => p.id === selectedPlatform)?.plans.map(plan => (
-              <TouchableOpacity
-                key={plan.id}
-                style={[
-                  styles.planCard,
-                  selectedPlan === plan.id && styles.planCardSelected
-                ]}
-                onPress={() => setSelectedPlan(plan.id)}
-              >
-                <View style={styles.planInfo}>
-                  <Text style={styles.planName}>{plan.name}</Text>
-                  <Text style={styles.planDetails}>
-                    {plan.screens} {typeof plan.screens === 'number' ? 'Screen' : ''} • {plan.quality}
-                    {plan.duration && ` • ${plan.duration}`}
-                  </Text>
-                </View>
-                <View style={styles.planPrice}>
-                  <IndianRupee size={16} color="#111827" />
-                  <Text style={styles.planPriceText}>{plan.price}</Text>
-                  <Text style={styles.planPricePeriod}>/month</Text>
-                </View>
-                {selectedPlan === plan.id && (
-                  <View style={styles.planSelectedIndicator}>
-                    <Check size={20} color="#8B5CF6" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+            <Text style={styles.stepTitle}>Step 1: Basic Information</Text>
 
-        {/* Step 4: Invite Members */}
-        <View style={styles.section}>
-          <Text style={styles.stepTitle}>Step 4: Invite Members (Optional)</Text>
-          <Text style={styles.stepSubtitle}>Invite via Email, Phone, or WhatsApp</Text>
-          
-          {memberContacts.map((contact, index) => (
-            <View key={index} style={styles.contactInputContainer}>
-              <View style={styles.contactTypeSelector}>
-                {contactTypes.map((type) => {
-                  const IconComponent = type.icon;
-                  return (
-                    <TouchableOpacity
-                      key={type.id}
-                      style={[
-                        styles.contactTypeButton,
-                        contact.type === type.id && styles.contactTypeButtonSelected
-                      ]}
-                      onPress={() => updateMemberContact(index, 'type', type.id)}
-                    >
-                      <IconComponent 
-                        size={16} 
-                        color={contact.type === type.id ? "#FFFFFF" : "#6B7280"} 
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Group Name</Text>
               <TextInput
-                style={[styles.input, styles.contactInput]}
-                placeholder={getContactPlaceholder(contact.type)}
-                value={contact.value}
-                onChangeText={(value) => updateMemberContact(index, 'value', value)}
-                keyboardType={contact.type === 'email' ? 'email-address' : 'phone-pad'}
-                autoCapitalize="none"
+                style={styles.input}
+                placeholder="e.g., Family Netflix, Friends Squad"
+                value={groupName}
+                onChangeText={setGroupName}
               />
-              {memberContacts.length > 1 && (
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => removeMemberContact(index)}
-                >
-                  <X size={20} color="#EF4444" />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Describe your group..."
+                placeholderTextColor="#888"
+                value={groupDescription}
+                onChangeText={setGroupDescription}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Maximum Members</Text>
+              <View style={styles.memberSelector}>
+                {[2, 3, 4, 5, 6].map(num => (
+                  <TouchableOpacity
+                    key={num}
+                    style={[
+                      styles.memberButton,
+                      maxMembers === num.toString() && styles.memberButtonSelected
+                    ]}
+                    onPress={() => setMaxMembers(num.toString())}
+                  >
+                    <Text style={[
+                      styles.memberButtonText,
+                      maxMembers === num.toString() && styles.memberButtonTextSelected
+                    ]}>
+                      {num}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* <TouchableOpacity
+              style={styles.privacyToggle}
+              onPress={() => setIsPrivate(!isPrivate)}
+            >
+              <View style={[styles.checkbox, isPrivate && styles.checkboxSelected]}>
+                {isPrivate && <Check size={16} color="#FFFFFF" />}
+              </View>
+              <View style={styles.privacyInfo}>
+                <Text style={styles.privacyTitle}>Private Group</Text>
+                <Text style={styles.privacySubtitle}>Only invited members can join</Text>
+              </View>
+            </TouchableOpacity> */}
+          </View>
+
+          {/* Step 2: Platform Selection */}
+          <View style={styles.section}>
+            <Text style={styles.stepTitle}>Step 2: Select Platform (Optional)</Text>
+
+            <View style={styles.platformGrid}>
+              {displayedPlatforms.map(platform => {
+                const faName = getFAIconName(platform.iconClass);
+                return (
+                  <TouchableOpacity
+                    key={platform.id}
+                    style={[
+                      styles.platformCard,
+                      selectedPlatform === platform.id && styles.platformCardSelected
+                    ]}
+                    onPress={() => {
+                      setSelectedPlatform(platform.id);
+                      setSelectedPlan(null);
+                      setSkip(false);
+                    }}
+                  >
+                    {faName && typeof faName === "string" ? (
+                      <FontAwesome5
+                        name={faName}
+                        size={32}
+                        color={platform.color}
+                        style={styles.platformImage}
+                      />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.platformImage,
+                          { color: platform.color, fontSize: 28, fontWeight: "bold" }
+                        ]}
+                      >
+                        {platform.name?.charAt(0).toUpperCase()}
+                      </Text>
+                    )}
+                    <Text style={styles.platformName}>{platform.name}</Text>
+                    {selectedPlatform === platform.id && (
+                      <View style={[styles.selectedIndicator, { backgroundColor: platform.color }]}>
+                        <Check size={16} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+              {platforms.length > 3 && (
+                <TouchableOpacity onPress={() => setShowAll(!showAll)} style={styles.moreButton}>
+                  <Text style={styles.moreButtonText}>
+                    {showAll ? "Show Less" : "Show More"}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
-          ))}
-          
-          <TouchableOpacity style={styles.addMemberButton} onPress={addMemberContact}>
-            <Plus size={20} color="#8B5CF6" />
-            <Text style={styles.addMemberText}>Add Another Member</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Cost Summary */}
-        {selectedPlatform && selectedPlan && (
-          <View style={styles.section}>
-            <View style={styles.costSummary}>
-              <LinearGradient
-                colors={['#8B5CF6', '#A78BFA']}
-                style={styles.costSummaryGradient}
-              >
-                <Text style={styles.costSummaryTitle}>Cost Summary</Text>
-                <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Total Monthly Cost:</Text>
-                  <View style={styles.costValue}>
-                    <IndianRupee size={16} color="#FFFFFF" />
-                    <Text style={styles.costAmount}>
-                      {platforms.find(p => p.id === selectedPlatform)?.plans.find(p => p.id === selectedPlan)?.price}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Cost per Member:</Text>
-                  <View style={styles.costValue}>
-                    <IndianRupee size={16} color="#FFFFFF" />
-                    <Text style={styles.costAmount}>{calculateCostPerMember()}</Text>
-                  </View>
-                </View>
-                <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Your Savings:</Text>
-                  <View style={styles.costValue}>
-                    <IndianRupee size={16} color="#FFFFFF" />
-                    <Text style={styles.costAmount}>
-                      {platforms.find(p => p.id === selectedPlatform)?.plans.find(p => p.id === selectedPlan)?.price - calculateCostPerMember()}
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
+            {/* Skip Button */}
+            <View style={styles.checkboxContainer}>
+              <Checkbox
+                value={skip}
+                onValueChange={(newValue) => {
+                  setSkip(newValue);
+                  if (newValue) {
+                    // Clear selected platform/plan if checked
+                    setSelectedPlatform(null);
+                    setSelectedPlan(null);
+                  }
+                }}
+                tintColors={{ true: "#8B5CF6", false: "#999" }} // customize color
+              />
+              <Text style={styles.skipText}>Skip for now</Text>
             </View>
           </View>
-        )}
 
-        {/* Create Group Button */}
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
-            <LinearGradient
-              colors={['#8B5CF6', '#A78BFA']}
-              style={styles.createButtonGradient}
-            >
-              <Users size={20} color="#FFFFFF" />
-              <Text style={styles.createButtonText}>Create Group</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Step 3: Plan Selection */}
+          {selectedPlatform && (
+            <View style={styles.section}>
+              <Text style={styles.stepTitle}>Step 3: Select Plan</Text>
+
+              {platforms.find(p => p.id === selectedPlatform)?.plans.map(plan => (
+                <TouchableOpacity
+                  key={plan.planName}   // use API value
+                  style={[
+                    styles.planCard,
+                    selectedPlan === plan.planName && styles.planCardSelected
+                  ]}
+                  onPress={() => setSelectedPlan(plan.planName)}
+                >
+                  <View style={styles.planInfo}>
+                    <Text style={styles.planName}>{plan.planName}</Text>
+                    <Text style={styles.planDetails}>
+                      {plan.maxScreens} {typeof plan.maxScreens === 'number' ? 'Screen' : ''} • {plan.videoQuality}
+                      {plan.duration && ` • ${plan.duration}`}
+                    </Text>
+                  </View>
+                  <View style={styles.planPrice}>
+                    <IndianRupee size={16} color="#111827" />
+                    <Text style={styles.planPriceText}>{plan.price}</Text>
+                    <Text style={styles.planPricePeriod}> /{plan.duration}</Text>
+                  </View>
+                  {selectedPlan === plan.planName && (
+                    <View style={styles.planSelectedIndicator}>
+                      <Check size={20} color="#8B5CF6" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Step 4: Invite Members */}
+          <View style={styles.section}>
+            <Text style={styles.stepTitle}>Step 4: Invite Members (Optional)</Text>
+            <Text style={styles.stepSubtitle}>Invite via Email, Phone, or WhatsApp</Text>
+
+            {memberContacts.map((contact, index) => (
+              <View key={index} style={styles.contactInputContainer}>
+                <View style={styles.contactTypeSelector}>
+                  {contactTypes.map((type) => {
+                    const IconComponent = type.icon;
+                    return (
+                      <TouchableOpacity
+                        key={type.id}
+                        style={[
+                          styles.contactTypeButton,
+                          contact.type === type.id && styles.contactTypeButtonSelected
+                        ]}
+                        onPress={() => updateMemberContact(index, 'type', type.id)}
+                      >
+                        <IconComponent
+                          size={16}
+                          color={contact.type === type.id ? "#FFFFFF" : "#6B7280"}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  style={[styles.input, styles.contactInput]}
+                  placeholder={getContactPlaceholder(contact.type)}
+                  placeholderTextColor="#888"
+                  value={contact.value}
+                  onChangeText={(value) => updateMemberContact(index, 'value', value)}
+                  keyboardType={contact.type === 'email' ? 'email-address' : 'phone-pad'}
+                  autoCapitalize="none"
+                />
+                {memberContacts.length > 1 && (
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeMemberContact(index)}
+                  >
+                    <X size={20} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.addMemberButton} onPress={addMemberContact}>
+              <Plus size={20} color="#8B5CF6" />
+              <Text style={styles.addMemberText}>Add Another Member</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Cost Summary */}
+          {selectedPlatform && selectedPlan && (
+            <View style={styles.section}>
+              <View style={styles.costSummary}>
+                <LinearGradient
+                  colors={['#8B5CF6', '#A78BFA']}
+                  style={styles.costSummaryGradient}
+                >
+                  <Text style={styles.costSummaryTitle}>Cost Summary</Text>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Total Monthly Cost:</Text>
+                    <View style={styles.costValue}>
+                      <IndianRupee size={16} color="#FFFFFF" />
+                      <Text style={styles.costAmount}>
+                        {platforms.find(p => p.id === selectedPlatform)?.plans.find(p => p.id === selectedPlan)?.price}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Cost per Member:</Text>
+                    <View style={styles.costValue}>
+                      <IndianRupee size={16} color="#FFFFFF" />
+                      <Text style={styles.costAmount}>{calculateCostPerMember()}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.costRow}>
+                    <Text style={styles.costLabel}>Your Savings:</Text>
+                    <View style={styles.costValue}>
+                      <IndianRupee size={16} color="#FFFFFF" />
+                      <Text style={styles.costAmount}>
+                        {platforms.find(p => p.id === selectedPlatform)?.plans.find(p => p.id === selectedPlan)?.price - calculateCostPerMember()}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </View>
+            </View>
+          )}
+
+          {/* Create Group Button */}
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.createButton} onPress={handleCreateGroup}>
+              <LinearGradient
+                colors={['#8B5CF6', '#A78BFA']}
+                style={styles.createButtonGradient}
+              >
+                <Users size={20} color="#FFFFFF" />
+                <Text style={styles.createButtonText}>Create Group</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView >
   );
 }
 
@@ -548,6 +625,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  moreButton: {
+    marginTop: 10,
+    alignSelf: "center",
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#eee",
+  },
+  moreButtonText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 10,
+  },
+  skipText: {
+    marginLeft: 8,
+    fontSize: 16,
   },
   planCard: {
     flexDirection: 'row',

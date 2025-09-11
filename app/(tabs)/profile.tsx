@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -11,30 +11,57 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { User, Settings, Bell, Shield, CreditCard, CircleHelp as HelpCircle, LogOut, Wallet as Edit, Star, Gift, Users, IndianRupee, ChevronRight, Phone, Mail, MapPin, Calendar } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { User, Settings, Bell, Shield, CreditCard, CircleHelp as HelpCircle, LogOut, Edit, Star, Gift, Users, IndianRupee, ChevronRight, Phone, Mail, MapPin, Calendar, Wallet } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { getAuth, signOut } from "firebase/auth";
+import { auth } from "../../firebaseConfig";
+import axios from 'axios';
+
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [whatsappNotifications, setWhatsappNotifications] = useState(true);
+  const [userProfile, setUserProfile] = useState([]);
+  const [userStats, setUserStats] = useState([]);
 
-  const userProfile = {
-    name: 'Rajesh Kumar',
-    email: 'rajesh.kumar@email.com',
-    phone: '+91 9876543210',
-    location: 'Mumbai, India',
-    joinedDate: '2023-12-01',
-    avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=200',
-    totalSavings: 2340,
-    activeGroups: 3,
-    referralCode: 'RAJ2024',
-  };
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+
+          if (!currentUser) {
+            console.error("No user is logged in");
+            return;
+          }
+
+          const idToken = await currentUser.getIdToken();
+
+          const tribesRes = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/auth/profile`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          // console.log("profile : ", tribesRes.data);
+          setUserProfile(tribesRes.data)
+          const statsRes = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/dashboard/stats`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          setUserStats(statsRes.data);
+        } catch (error) {
+          console.error("Error fetching groups:", error);
+        }
+      };
+      fetchData();
+    }, []));
 
   const stats = [
-    { label: 'Total Savings', value: `₹${userProfile.totalSavings}`, icon: IndianRupee, color: '#10B981' },
-    { label: 'Active Groups', value: userProfile.activeGroups, icon: Users, color: '#8B5CF6' },
-    { label: 'Referrals', value: '5', icon: Gift, color: '#F59E0B' },
+    { label: 'Monthly Savings', value: `₹${userStats.monthlySavings}`, icon: IndianRupee, color: '#10B981' },
+    { label: 'Active Groups', value: userStats.activeTribes, icon: Users, color: '#8B5CF6' },
+    { label: 'Subscriptions', value: userStats.totalSubscriptions, icon: Gift, color: '#F59E0B' },
+    { label: 'Monthly Spending', value: `₹${userStats.monthlySpend}`, icon: IndianRupee, color: '#10B981' },
   ];
 
   const menuItems = [
@@ -87,11 +114,25 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      "Logout",
+      "Are you sure you want to logout?",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => router.replace('/auth') }
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            console.log("button is clicked")
+            try {
+              await signOut(auth);
+              setTimeout(() => {
+                router.replace("/login");
+              }, 100);
+            } catch (err) {
+              Alert.alert("Error", err.message);
+            }
+          }
+        },
       ]
     );
   };
@@ -103,7 +144,7 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity onPress={() => router.push('/wallet')}>
-            <Edit size={24} color="#6B7280" />
+            <Wallet size={24} color="#6B7280" />
           </TouchableOpacity>
         </View>
 
@@ -113,8 +154,8 @@ export default function ProfileScreen() {
             colors={['#8B5CF6', '#A78BFA']}
             style={styles.profileGradient}
           >
-            <Image source={{ uri: userProfile.avatar }} style={styles.profileImage} />
-            <Text style={styles.profileName}>{userProfile.name}</Text>
+            <Image source={{ uri: userProfile.profileImageUrl }} style={styles.profileImage} />
+            <Text style={styles.profileName}>{userProfile.firstName} {userProfile.lastName}</Text>
             <View style={styles.profileInfo}>
               <View style={styles.profileInfoItem}>
                 <Mail size={14} color="#FFFFFF" />
@@ -122,16 +163,22 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.profileInfoItem}>
                 <Phone size={14} color="#FFFFFF" />
-                <Text style={styles.profileInfoText}>{userProfile.phone}</Text>
+                <Text style={styles.profileInfoText}>{userProfile.phoneNumber}</Text>
               </View>
-              <View style={styles.profileInfoItem}>
+              {/* <View style={styles.profileInfoItem}>
                 <MapPin size={14} color="#FFFFFF" />
                 <Text style={styles.profileInfoText}>{userProfile.location}</Text>
-              </View>
+              </View> */}
               <View style={styles.profileInfoItem}>
                 <Calendar size={14} color="#FFFFFF" />
                 <Text style={styles.profileInfoText}>
-                  Member since {new Date(userProfile.joinedDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  Member since{" "}
+                  {userProfile?.createdAt?.["_seconds"]
+                    ? new Date(userProfile.createdAt._seconds * 1000).toLocaleDateString(
+                      "en-US",
+                      { month: "long", year: "numeric" }
+                    )
+                    : ""}
                 </Text>
               </View>
             </View>
@@ -260,21 +307,21 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',   // allow wrapping to next line
     paddingHorizontal: 20,
     marginBottom: 24,
   },
+
   statCard: {
-    flex: 1,
+    width: '48%',        // take about half of the row
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginBottom: 16,    // space between rows
+    marginHorizontal: '1%', // small side spacing
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,

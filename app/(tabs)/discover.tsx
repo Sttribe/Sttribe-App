@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from "axios";
 import {
   View,
@@ -9,7 +9,11 @@ import {
   SafeAreaView,
   Image,
   TextInput,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  Button,
+  FlatList,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -21,10 +25,12 @@ import {
   Eye,
   Heart,
   Share,
-  Bookmark
+  Bookmark,
+  ArrowLeft
 } from 'lucide-react-native';
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { chatWithOpenAI, getApiKey, storeApiKey } from '../openaiService';
 
 export default function DiscoverScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,9 +38,12 @@ export default function DiscoverScreen() {
   const [freeContent, setFreeContent] = useState([]);
   const [categories, setCategories] = useState(['All']);
   const [loading, setLoading] = useState(true);
-  // const [filteredContent, setFilteredContent] = useState([]);
-
-  // const categories = ['All', 'Drama', 'TV Shows', 'Biography', 'Thriller', 'Comedy', 'Documentaries'];
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollViewRef = useRef(null);
 
   const platforms = [
     { name: 'Netflix', color: '#E50914', icon: 'netflix', lib: 'MaterialCommunityIcons' },
@@ -49,7 +58,7 @@ export default function DiscoverScreen() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await axios.get("https://api-s2onatgxwq-uc.a.run.app/api/free-streams");
+        const res = await axios.get(`https://api-s2onatgxwq-uc.a.run.app/api/free-streams`);
         setFreeContent(res.data);
       } catch (error) {
         console.error("Error fetching free streams:", error);
@@ -64,26 +73,55 @@ export default function DiscoverScreen() {
   useEffect(() => {
     if (freeContent.length > 0) {
       const uniqueGenres = [...new Set(
-        freeContent.map(item =>
-          item.genre?.charAt(0).toUpperCase() + item.genre?.slice(1)
-        )
+        freeContent.map(item => item.genre?.charAt(0).toUpperCase() + item.genre?.slice(1))
       )];
       setCategories(['All', ...uniqueGenres]);
     }
   }, [freeContent]);
 
   const filteredContent = freeContent.filter(item => {
-    const matchesCategory =
-      selectedCategory === 'All' ||
-      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase().slice(0, -1)); // handles plural
+    const matchesCategory = selectedCategory === 'All' ||
+      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase().slice(0, -1));
 
-    const matchesSearch =
-      item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase())
+      item.genre?.toLowerCase().includes(selectedCategory.toLowerCase());
 
     return matchesCategory && matchesSearch;
   });
+
+  useEffect(() => {
+    const loadKey = async () => {
+      const storedKey = await getApiKey();
+      if (storedKey) setApiKey(storedKey);
+    };
+    loadKey();
+  }, []);
+
+  const handleSend = async () => {
+    if (!inputText.trim() || !apiKey) return;
+
+    const userMessage = { role: 'user', content: inputText };
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setInputText('');
+    setIsLoading(true);
+
+    try {
+      const aiResponse = await chatWithOpenAI(updatedMessages, apiKey);
+      setMessages([...updatedMessages, aiResponse]);
+    } catch (err) {
+      setMessages([...updatedMessages, { role: 'assistant', content: 'Error fetching AI response.' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSuggestionPress = (text) => {
+    setInputText(text);
+    setShowChatModal(true);
+    handleSend(); // immediately send to AI
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -91,13 +129,9 @@ export default function DiscoverScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Discover</Text>
-          {/* <TouchableOpacity style={styles.filterButton}>
-            <Filter size={20} color="#6B7280" />
-          </TouchableOpacity> */}
         </View>
-
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
+        {/* <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
             <Search size={20} color="#9CA3AF" />
             <TextInput
@@ -108,7 +142,7 @@ export default function DiscoverScreen() {
               placeholderTextColor="#9CA3AF"
             />
           </View>
-        </View>
+        </View> */}
 
         {/* Categories */}
         <View style={styles.categoriesContainer}>
@@ -138,11 +172,12 @@ export default function DiscoverScreen() {
         {/* Free Content */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Free to Watch</Text>
+
           {loading ? (
             <ActivityIndicator size="large" color="#8B5CF6" />
           ) : (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              {filteredContent.map((item) => (
+              {filteredContent.slice(0, 4).map((item) => (
                 <TouchableOpacity
                   onPress={() => {
                     router.push({
@@ -153,15 +188,24 @@ export default function DiscoverScreen() {
                   key={item.id}
                   style={styles.contentCard}
                 >
-                  <Image source={{ uri: item.thumbnail }} style={styles.contentImage} />
+                  <Image
+                    source={{ uri: item.thumbnail }}
+                    style={styles.contentImage}
+                  />
                   <View style={styles.contentInfo}>
-                    <Text style={styles.contentTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={styles.contentTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
                     <Text style={styles.metaText}>{item.genre}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
             </View>
           )}
+
+          <TouchableOpacity onPress={() => router.push('/FreeOttStream')} style={styles.viewAllButton}>
+            <Text style={styles.viewAllText}>View All</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Platform Recommendations */}
@@ -175,9 +219,17 @@ export default function DiscoverScreen() {
                   style={styles.platformGradient}
                 >
                   {platform.lib === 'FontAwesome' ? (
-                    <FontAwesome name={platform.icon} size={28} color={platform.color} />
+                    <FontAwesome
+                      name={platform.icon}
+                      size={28}
+                      color={platform.color}
+                    />
                   ) : (
-                    <MaterialCommunityIcons name={platform.icon} size={28} color={platform.color} />
+                    <MaterialCommunityIcons
+                      name={platform.icon}
+                      size={28}
+                      color={platform.color}
+                    />
                   )}
                   <Text style={styles.platformName}>{platform.name}</Text>
                 </LinearGradient>
@@ -185,7 +237,105 @@ export default function DiscoverScreen() {
             ))}
           </View>
         </View>
+
+        <View style={styles.suggestButtonsContainer}>
+          <Text style={styles.sectionTitle}>Suggestions</Text>
+          {/* First row */}
+          <View style={styles.firstRow}>
+            <TouchableOpacity
+              style={[styles.suggestButton, styles.buttonMarginHorizontal]}
+              onPress={() => handleSuggestionPress("🎬 Suggest Me Movies")}
+            >
+              <Text style={styles.suggestButtonText}>🎬 Suggest Me Movies</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.suggestButton, styles.buttonMarginHorizontal]}
+              onPress={() => handleSuggestionPress("🎬 New Releases")}
+            >
+              <Text style={styles.suggestButtonText}>🎬 New Releases</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Second row */}
+          <TouchableOpacity
+            style={[styles.suggestButton, styles.secondRow]}
+            onPress={() => handleSuggestionPress("🎬 New Series")}
+          >
+            <Text style={styles.suggestButtonText}>🎬 New Series</Text>
+          </TouchableOpacity>
+        </View>
+
+
       </ScrollView>
+
+      <Modal visible={showChatModal} animationType="slide">
+        <SafeAreaView style={styles.chatSafeArea}>
+          {/* Header */}
+          <View style={styles.chatHeader}>
+            <TouchableOpacity
+              onPress={() => setShowChatModal(false)}
+              style={styles.backButton}
+            >
+              <ArrowLeft size={24} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.chatHeaderTitle}>Movie & Series Suggestions</Text>
+          </View>
+
+          {/* KeyboardAvoidingView ensures input stays visible */}
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={80} // adjust for SafeArea & header height
+          >
+            {/* Scrollable chat */}
+            <ScrollView
+              contentContainerStyle={styles.messagesList}
+              ref={scrollViewRef}
+              onContentSizeChange={() =>
+                scrollViewRef.current?.scrollToEnd({ animated: true })
+              }
+            >
+              {messages.map((item, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.message,
+                    item.role === "user"
+                      ? styles.userMessage
+                      : styles.aiMessage
+                  ]}
+                >
+                  <Text style={styles.messageText}>{item.content}</Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Input */}
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.chatInput}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Ask for a movie suggestion..."
+                placeholderTextColor="#9CA3AF"
+                editable={!isLoading}
+              />
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleSend}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Send</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -223,10 +373,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
@@ -262,6 +409,25 @@ const styles = StyleSheet.create({
   },
   categoryButtonTextActive: {
     color: '#FFFFFF',
+  },
+  viewAllButton: {
+    alignSelf: 'center',
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  viewAllText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   section: {
     paddingHorizontal: 20,
@@ -332,7 +498,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contentCard: {
-    width: '48%', // two items per row
+    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     marginBottom: 16,
@@ -345,7 +511,7 @@ const styles = StyleSheet.create({
   },
   contentImage: {
     width: '100%',
-    height: 200, // taller for poster look
+    height: 200,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
@@ -368,7 +534,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
   },
-
   platformsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -394,5 +559,106 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
     textAlign: 'center',
+  },
+  suggestButton: {
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  suggestButtonsContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  firstRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginHorizontal: -5, // to balance inner margin
+  },
+  buttonMarginHorizontal: {
+    marginHorizontal: 5,
+  },
+  secondRow: {
+    marginTop: 10,
+  },
+  chatSafeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  chatHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#fff", // white header
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  chatHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#000",
+  },
+  messagesList: {
+    padding: 16,
+    flexGrow: 1,
+  },
+  message: {
+    padding: 12,
+    borderRadius: 10,
+    marginVertical: 6,
+    maxWidth: "80%",
+  },
+  userMessage: {
+    alignSelf: "flex-end",
+    backgroundColor: "#8B5CF6",
+  },
+  aiMessage: {
+    alignSelf: "flex-start",
+    backgroundColor: "#ECECEC",
+  },
+  messageText: {
+    color: "#000",
+    fontSize: 15,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    backgroundColor: "#fff",
+  },
+  chatInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    fontSize: 15,
+  },
+  sendButton: {
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  sendButtonText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });

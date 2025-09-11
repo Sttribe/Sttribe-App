@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,72 +7,129 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Plus,
   Users,
   DollarSign,
-  TrendingUp,
   Bell,
   ChevronRight,
   Play,
-  Star
+  Star,
+  CreditCard,
+  Tv,
+  IndianRupee
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import axios from 'axios';
+import { getAuth } from 'firebase/auth';
+// import { API_BASE_URL } from '@env';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [dashboardstats, setDashboardstats] = useState([]);
+  const [recentGroups, setRecentGroups] = useState([]);
+  const [freeContent, setFreeContent] = useState([]);
+  const [profile, setProfile] = useState([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          setLoading(true);
+
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+
+          if (!currentUser) {
+            console.error("No user is logged in");
+            return;
+          }
+
+          const idToken = await currentUser.getIdToken();
+
+          const res = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/dashboard/stats`,
+            {
+              headers: {
+                Authorization: `Bearer ${idToken}`, // 👈 send token
+              },
+            }
+          );
+          // console.log("Dashboard stats:", res.data);
+          setDashboardstats(res.data);
+
+          const tribesRes = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/tribes`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          const profileData = await axios.get(
+            `https://api-s2onatgxwq-uc.a.run.app/api/auth/profile`,
+            { headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          setProfile(profileData.data);
+
+          const platformImages = {
+            Netflix: "https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Amazon Prime": "https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400",
+            "Disney+ Hotstar": "https://images.pexels.com/photos/7991669/pexels-photo-7991669.jpeg?auto=compress&cs=tinysrgb&w=400",
+          };
+
+          const transformed = tribesRes.data.map((tribe) => {
+            const platform = tribe.platform || "";
+            return {
+              id: tribe.id,
+              name: tribe.name,
+              platform,
+              members: tribe._count?.members ?? tribe.members.length,
+              avatars: tribe.members
+                .map(m => m.user?.profileImageUrl)
+                .filter(Boolean)
+                .slice(0, 5),
+              image:
+                tribe.imageUrl ||
+                platformImages[platform] ||
+                platformImages["Amazon Prime"], // fallback to Amazon Prime if platform unknown
+              color: "#E50914", // you could also map color based on platform
+            };
+          });
+          setRecentGroups(transformed);
+
+        } catch (error) {
+          console.error("Error fetching Dashboard Stats:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+    }, [])
+  );
+  useFocusEffect(
+    useCallback(() => {
+      const fetchData = async () => {
+        try {
+          setLoading(true);
+          const res = await axios.get(`https://api-s2onatgxwq-uc.a.run.app/api/free-streams`);
+          setFreeContent(res.data);
+        } catch (error) {
+          console.error("Error fetching free streams:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+    }, []));
+
 
   const stats = [
-    { label: 'Active Groups', value: '3', icon: Users, color: '#8B5CF6' },
-    { label: 'Monthly Savings', value: '₹450', icon: DollarSign, color: '#10B981' },
-    { label: 'Total Saved', value: '₹2,340', icon: TrendingUp, color: '#F59E0B' },
-  ];
-
-  const recentGroups = [
-    {
-      id: 1,
-      name: 'Netflix Squad',
-      platform: 'Netflix',
-      members: 4,
-      cost: 199,
-      image: 'https://images.pexels.com/photos/4009402/pexels-photo-4009402.jpeg?auto=compress&cs=tinysrgb&w=400',
-      color: '#E50914',
-    },
-    {
-      id: 2,
-      name: 'Prime Family',
-      platform: 'Amazon Prime',
-      members: 6,
-      cost: 166,
-      image: 'https://images.pexels.com/photos/3944091/pexels-photo-3944091.jpeg?auto=compress&cs=tinysrgb&w=400',
-      color: '#00A8E1',
-    },
-  ];
-
-  const trending = [
-    {
-      id: 1,
-      title: 'Stranger Things 4',
-      platform: 'Netflix',
-      rating: 4.8,
-      image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
-    {
-      id: 2,
-      title: 'The Boys',
-      platform: 'Prime Video',
-      rating: 4.9,
-      image: 'https://images.pexels.com/photos/3945313/pexels-photo-3945313.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
-    {
-      id: 3,
-      title: 'Stranger Things 4',
-      platform: 'Netflix',
-      rating: 4.8,
-      image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400',
-    },
+    { label: 'Active Groups', value: dashboardstats.activeTribes, icon: Users, color: '#8B5CF6', action: () => router.push('/groups') },
+    { label: 'Monthly Savings', value: dashboardstats.monthlySavings, icon: IndianRupee, color: '#10B981' },
+    { label: 'Total Subscriptions', value: dashboardstats.totalSubscriptions, icon: Tv, color: '#F59E0B' },
   ];
 
   return (
@@ -82,7 +139,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome!</Text>
-            <Text style={styles.username}>Rajesh Kumar</Text>
+            <Text style={styles.username}>{profile.firstName}</Text>
           </View>
           <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.notificationBtn}>
             <Bell size={24} color="#6B7280" />
@@ -93,13 +150,13 @@ export default function HomeScreen() {
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           {stats.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
+            <Pressable onPress={stat.action} key={index} style={styles.statCard}>
               <View style={[styles.statIcon, { backgroundColor: stat.color + '20' }]}>
                 <stat.icon size={20} color={stat.color} />
               </View>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
-            </View>
+            </Pressable>
           ))}
         </View>
         {/* Quick Actions */}
@@ -143,7 +200,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {recentGroups.map((group) => (
+          {recentGroups.slice(0, 3).map((group) => (
             <TouchableOpacity
               key={group.id}
               style={styles.groupCard}
@@ -152,27 +209,48 @@ export default function HomeScreen() {
               <Image source={{ uri: group.image }} style={styles.groupImage} />
               <View style={styles.groupInfo}>
                 <Text style={styles.groupName}>{group.name}</Text>
-                <Text style={styles.groupPlatform}>{group.platform}</Text>
+                {/* <Text style={styles.groupPlatform}>{group.platform}</Text> */}
                 <View style={styles.groupMeta}>
                   <View style={styles.groupMembers}>
                     <Users size={14} color="#6B7280" />
                     <Text style={styles.groupMemberCount}>{group.members} members</Text>
                   </View>
-                  <Text style={styles.groupCost}>₹{group.cost}/month</Text>
+                  {/* <Text style={styles.groupCost}>₹{group.cost}/month</Text> */}
+                  <View style={styles.memberAvatars}>
+                    {(group.avatars ?? []).map((avatar, index) => (
+                      <Image
+                        key={index}
+                        source={{ uri: avatar }}
+                        style={[styles.memberAvatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                      />
+                    ))}
+                    {group.members > (group.avatars?.length ?? 0) && (
+                      <View style={[styles.memberAvatar, styles.extraMember]}>
+                        <Text style={styles.extraMemberText}>
+                          +{group.members - (group.avatars?.length ?? 0)}
+                        </Text>
+                      </View>
+                    )}
+                    <ChevronRight size={20} color="#9CA3AF" />
+                  </View>
                 </View>
               </View>
-              <ChevronRight size={20} color="#9CA3AF" />
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Trending Content */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trending Now</Text>
+          <Text style={styles.sectionTitle}>Suggestions To Watch</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {trending.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.trendingCard}>
-                <Image source={{ uri: item.image }} style={styles.trendingImage} />
+            {freeContent.slice(0, 3).map((item) => (
+              <TouchableOpacity onPress={() => {
+                router.push({
+                  pathname: '/movie-details',
+                  params: { item: JSON.stringify(item) }
+                });
+              }} key={item.id} style={styles.trendingCard}>
+                <Image source={{ uri: item.thumbnail }} style={styles.trendingImage} />
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.8)']}
                   style={styles.trendingOverlay}
@@ -185,9 +263,9 @@ export default function HomeScreen() {
                     <Text style={styles.trendingPlatform}>{item.platform}</Text>
                   </View>
                 </View>
-                <View style={styles.playButton}>
+                {/* <View style={styles.playButton}>
                   <Play size={16} color="#FFFFFF" />
-                </View>
+                </View> */}
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -298,6 +376,8 @@ const styles = StyleSheet.create({
   quickActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginVertical: 15,
+    marginTop: 20,
   },
   quickAction: {
     flex: 1,
@@ -324,6 +404,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
+    marginTop: 10,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
@@ -352,7 +433,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
-    marginTop: 2,
+    // marginTop: 2,
   },
   groupMeta: {
     flexDirection: 'row',
@@ -363,6 +444,28 @@ const styles = StyleSheet.create({
   groupMembers: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 2,
+  },
+  memberAvatars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  memberAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  extraMember: {
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  extraMemberText: {
+    fontSize: 10,
+    fontFamily: 'Inter-SemiBold',
+    color: '#6B7280',
   },
   groupMemberCount: {
     fontSize: 12,
@@ -382,6 +485,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
     position: 'relative',
     overflow: 'hidden',
+    marginTop: 15,
   },
   trendingImage: {
     width: '100%',
