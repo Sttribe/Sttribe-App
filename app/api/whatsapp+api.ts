@@ -1,42 +1,91 @@
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 // WhatsApp notification API
 export async function POST(request: Request) {
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
-    const body = await request.json();
-    const { phone, message, type } = body;
+    const { phone, message, type, templateData } = await request.json()
 
-    // In a real app, you would integrate with WhatsApp Business API
-    // or a service like Twilio, MessageBird, etc.
-    
-    const notificationData = {
-      id: `whatsapp_${Date.now()}`,
-      phone,
-      message,
-      type,
-      status: 'sent',
-      timestamp: new Date().toISOString(),
-    };
+    // WhatsApp Business API integration
+    const whatsappApiKey = process.env.WHATSAPP_API_KEY
+    const whatsappApiUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v17.0'
+    const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
 
-    // Simulate WhatsApp API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!whatsappApiKey) {
+      console.log('WhatsApp API key not configured, simulating send...')
+      return Response.json(
+        {
+          success: true,
+          message: 'WhatsApp notification simulated (API key not configured)',
+          messageId: `sim_${Date.now()}`
+        },
+        { headers: corsHeaders }
+      )
+    }
 
-    // Log the notification (in real app, this would be sent via WhatsApp)
-    console.log('WhatsApp Notification:', notificationData);
+    // Format phone number (remove + and ensure country code)
+    const formattedPhone = phone.replace(/\D/g, '').replace(/^91/, '91')
 
-    return Response.json({
-      success: true,
-      message: 'WhatsApp notification sent successfully',
-      data: notificationData,
-    });
-  } catch (error) {
+    // Prepare WhatsApp message payload
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: formattedPhone,
+      type: 'text',
+      text: {
+        body: message
+      }
+    }
+
+    // Send WhatsApp message
+    const phoneNumberId = whatsappPhoneNumberId || 'YOUR_PHONE_NUMBER_ID'
+    const response = await fetch(`${whatsappApiUrl}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${whatsappApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const result = await response.json()
+
+    if (response.ok) {
+      return Response.json(
+        {
+          success: true,
+          messageId: result.messages?.[0]?.id,
+          message: 'WhatsApp notification sent successfully'
+        },
+        { headers: corsHeaders }
+      )
+    } else {
+      throw new Error(result.error?.message || 'Failed to send WhatsApp message')
+    }
+  } catch (error: any) {
+    console.error('WhatsApp send error:', error)
     return Response.json(
-      { success: false, error: 'Failed to send WhatsApp notification' },
-      { status: 500 }
-    );
+      {
+        success: false,
+        error: error?.message || 'Failed to send WhatsApp notification',
+        message: 'Failed to send WhatsApp notification'
+      },
+      { status: 400, headers: corsHeaders }
+    )
   }
 }
 
 // Get notification templates
 export async function GET(request: Request) {
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     const templates = {
       group_invite: {
@@ -59,16 +108,20 @@ export async function GET(request: Request) {
         template: "🎬 {platform} subscription activated for '{groupName}'! Login details will be shared separately. Enjoy streaming!",
         variables: ['platform', 'groupName']
       }
-    };
+    }
 
-    return Response.json({
-      success: true,
-      data: templates,
-    });
-  } catch (error) {
     return Response.json(
-      { success: false, error: 'Failed to fetch templates' },
-      { status: 500 }
-    );
+      {
+        success: true,
+        data: templates,
+      },
+      { headers: corsHeaders }
+    )
+  } catch (error: any) {
+    console.error('Get templates error:', error)
+    return Response.json(
+      { success: false, error: error?.message || 'Failed to fetch templates' },
+      { status: 500, headers: corsHeaders }
+    )
   }
 }
