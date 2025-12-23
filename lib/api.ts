@@ -27,12 +27,39 @@ export const signOut = async () => {
   return { error }
 }
 
+// Helper function to get auth token for API calls
+const getAuthToken = async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token || null
+}
+
 // Group functions
 export const createGroup = async (groupData: any) => {
-  const { data, error } = await supabase.functions.invoke('create-group', {
-    body: groupData,
-  })
-  return { data, error }
+  try {
+    const token = await getAuthToken()
+    if (!token) {
+      return { data: null, error: { message: 'Not authenticated' } }
+    }
+
+    const response = await fetch('/api/create-group', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(groupData),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return { data: null, error: result }
+    }
+
+    return { data: result, error: null }
+  } catch (error: any) {
+    return { data: null, error: { message: error?.message || 'Failed to create group' } }
+  }
 }
 
 export const getMyGroups = async () => {
@@ -93,25 +120,88 @@ export const joinGroup = async (groupCode: string) => {
 
 // Payment functions
 export const createPayment = async (paymentData: any) => {
-  const { data, error } = await supabase.functions.invoke('process-payment', {
-    body: paymentData,
-  })
-  return { data, error }
+  try {
+    const token = await getAuthToken()
+    if (!token) {
+      return { data: null, error: { message: 'Not authenticated' } }
+    }
+
+    const response = await fetch('/api/process-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(paymentData),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return { data: null, error: result }
+    }
+
+    return { data: result, error: null }
+  } catch (error: any) {
+    return { data: null, error: { message: error?.message || 'Failed to process payment' } }
+  }
 }
 
 export const withdrawFunds = async (withdrawalData: any) => {
-  const { data, error } = await supabase.functions.invoke('withdraw-funds', {
-    body: withdrawalData,
-  })
-  return { data, error }
+  try {
+    const token = await getAuthToken()
+    if (!token) {
+      return { data: null, error: { message: 'Not authenticated' } }
+    }
+
+    const response = await fetch('/api/withdraw-funds', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(withdrawalData),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return { data: null, error: result }
+    }
+
+    return { data: result, error: null }
+  } catch (error: any) {
+    return { data: null, error: { message: error?.message || 'Failed to withdraw funds' } }
+  }
 }
 
 // Recharge functions
 export const processRecharge = async (rechargeData: any) => {
-  const { data, error } = await supabase.functions.invoke('process-recharge', {
-    body: rechargeData,
-  })
-  return { data, error }
+  try {
+    const token = await getAuthToken()
+    if (!token) {
+      return { data: null, error: { message: 'Not authenticated' } }
+    }
+
+    const response = await fetch('/api/recharge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(rechargeData),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return { data: null, error: result }
+    }
+
+    return { data: result, error: null }
+  } catch (error: any) {
+    return { data: null, error: { message: error?.message || 'Failed to process recharge' } }
+  }
 }
 
 export const getRechargeHistory = async () => {
@@ -175,8 +265,29 @@ export const markNotificationAsRead = async (notificationId: string) => {
 
 // WhatsApp functions
 export const sendWhatsAppNotification = async (phone: string, message: string, type: string) => {
-  const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-    body: { phone, message, type },
-  })
-  return { data, error }
+  try {
+    const token = await getAuthToken()
+    if (!token) {
+      return { data: null, error: { message: 'Not authenticated' } }
+    }
+
+    const response = await fetch('/api/whatsapp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ phone, message, type }),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      return { data: null, error: result }
+    }
+
+    return { data: result, error: null }
+  } catch (error: any) {
+    return { data: null, error: { message: error?.message || 'Failed to send WhatsApp notification' } }
+  }
 }
